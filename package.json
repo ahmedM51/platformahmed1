@@ -3,18 +3,11 @@
   "name": "smart-student-platform",
   "version": "1.0.0",
   "description": "Advanced AI Educational Platform",
-  "main": "server.js",
   "dependencies": {
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "@google/genai": "^1.34.0",
     "@supabase/supabase-js": "^2.45.0",
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
     "lucide-react": "^0.263.1"
-  },
-  "scripts": {
-    "start": "node server.js"
   }
 }

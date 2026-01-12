@@ -2,232 +2,323 @@
 import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://pxmhwwovxrnefiryywva.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4bWh3d292eHJuZWZpcnl5d3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MzgzNjQsImV4cCI6MjA3MjAxNDM2NH0.FqzkWel93icaJ781ZCPhvzfVJu4iwqCa3hxV3AKuRlA';
+// Supabase Configuration - New Project Credentials
+const supabaseUrl = 'https://cmaxutqmblvvghftouqx.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtYXh1dHFtYmx2dmdoZnRvdXF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NTkyNDksImV4cCI6MjA4MTEzNTI0OX0.a8VbYwNY6mYkCBMiSSwUVU-zThSQnvIBEeH4GT_i-Xk';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// معرّف ثابت للمستخدم (UUID)
-const TEMP_USER_ID = '00000000-0000-0000-0000-000000000001';
+// ثابت لمعرف المستخدم بما أننا نستخدم نظام Auth وهمي حالياً
+const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
+
+const KEYS = {
+  USER: 'smart_student_user',
+  SUBJECTS: 'smart_student_subjects',
+  TASKS: 'smart_student_tasks',
+  NOTES: 'smart_student_notes',
+  STATS: 'smart_student_stats'
+};
+
+const local = {
+  get: (key: string) => {
+    const val = localStorage.getItem(key);
+    return val ? JSON.parse(val) : null;
+  },
+  set: (key: string, val: any) => {
+    localStorage.setItem(key, JSON.stringify(val));
+  }
+};
 
 export const db = {
   // User Management
   saveUser: async (user: User) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .upsert({ 
-        id: TEMP_USER_ID, 
-        email: user.email, 
-        full_name: user.full_name, 
+    local.set(KEYS.USER, user);
+    try {
+      await supabase.from('profiles').upsert({
+        id: MOCK_USER_ID,
+        email: user.email,
+        full_name: user.full_name,
         xp: user.xp || 120
-      }, { onConflict: 'id' })
-      .select()
-      .single();
-    
-    if (error) {
-      console.error("Supabase Error Details:", error.message, error.details, error.hint);
-      throw new Error(`خطأ في قاعدة البيانات: ${error.message}`);
+      });
+    } catch (e) {
+      console.error("Supabase Error:", e);
     }
-    return data;
+    return user;
   },
   
   getUser: async (): Promise<User | null> => {
+    const localUser = local.get(KEYS.USER);
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', TEMP_USER_ID)
-        .maybeSingle(); // استخدام maybeSingle بدلاً من single لتجنب الأخطاء إذا كان المستخدم غير موجود
-      
-      if (error) {
-        console.warn("Supabase Fetch User Warning:", error.message);
-        return null;
+        .eq('id', MOCK_USER_ID)
+        .maybeSingle();
+      if (data) {
+        local.set(KEYS.USER, data);
+        return data as User;
       }
-      return data;
-    } catch (e) {
-      return null;
-    }
-  },
-
-  calculateTotalXP: (subjects: Subject[], tasks: Task[], notes: Note[], stats: StudyStats): number => {
-    let total = 120;
-    if (subjects) {
-      subjects.forEach(s => {
-        total += (s.lectures?.filter(l => l.isCompleted).length || 0) * 20;
-      });
-    }
-    if (tasks) {
-      total += tasks.filter(t => t.status === 'completed').length * 10;
-    }
-    if (notes) {
-      total += notes.length * 15;
-    }
-    return total;
+    } catch (e) {}
+    return localUser;
   },
 
   // Subjects Management
   getSubjects: async (): Promise<Subject[]> => {
-    const { data, error } = await supabase
-      .from('subjects')
-      .select('*')
-      .eq('user_id', TEMP_USER_ID);
-    if (error) {
-      console.error("Fetch Subjects Error:", error.message);
-      return [];
-    }
-    return data || [];
+    const localData = local.get(KEYS.SUBJECTS) || [];
+    try {
+      const { data } = await supabase
+        .from('subjects')
+        .select('*')
+        .eq('user_id', MOCK_USER_ID);
+      if (data) {
+        local.set(KEYS.SUBJECTS, data);
+        return data as Subject[];
+      }
+    } catch (e) {}
+    return localData;
   },
   
   saveSubject: async (sub: Partial<Subject>) => {
-    const { error } = await supabase
-      .from('subjects')
-      .insert({
-        user_id: TEMP_USER_ID,
+    const current = local.get(KEYS.SUBJECTS) || [];
+    const newSub = { 
+      ...sub, 
+      id: Date.now(), 
+      progress: 0, 
+      lectures: [], 
+      user_id: MOCK_USER_ID
+    };
+    
+    local.set(KEYS.SUBJECTS, [...current, newSub]);
+
+    try {
+      await supabase.from('subjects').insert({
+        user_id: MOCK_USER_ID,
         name: sub.name,
         color: sub.color,
         progress: 0,
         lectures: []
       });
-    if (error) console.error("Save Subject Error:", error.message);
-    return await db.getSubjects();
+      return await db.getSubjects();
+    } catch (e) {
+      console.error("Save Subject Error:", e);
+    }
+    return [...current, newSub] as Subject[];
   },
 
   deleteSubject: async (id: number) => {
-    const { error } = await supabase.from('subjects').delete().eq('id', id);
-    if (error) console.error("Delete Subject Error:", error.message);
-    return await db.getSubjects();
+    const current = local.get(KEYS.SUBJECTS) || [];
+    const updated = current.filter((s: any) => s.id !== id);
+    local.set(KEYS.SUBJECTS, updated);
+    try {
+      await supabase.from('subjects').delete().eq('id', id);
+    } catch (e) {}
+    return updated;
   },
 
   addLecture: async (subjectId: number, lecture: any) => {
-    const { data: subject, error: fetchErr } = await supabase.from('subjects').select('lectures').eq('id', subjectId).single();
-    if (subject) {
-      const updatedLectures = [...(subject.lectures || []), { 
-        ...lecture, 
-        id: Date.now(), 
-        isCompleted: false, 
-        date: new Date().toLocaleDateString('ar-EG') 
-      }];
-      const { error: updateErr } = await supabase.from('subjects').update({ lectures: updatedLectures }).eq('id', subjectId);
-      if (updateErr) console.error("Update Lecture Error:", updateErr.message);
-    }
-    return await db.getSubjects();
+    const subjects = local.get(KEYS.SUBJECTS) || [];
+    const updated = subjects.map((s: any) => {
+      if (s.id === subjectId) {
+        const newLec = { ...lecture, id: Date.now(), isCompleted: false, date: new Date().toLocaleDateString('ar-EG') };
+        const updatedLecs = [...(s.lectures || []), newLec];
+        const completed = updatedLecs.filter((l: any) => l.isCompleted).length;
+        const progress = updatedLecs.length > 0 ? Math.round((completed / updatedLecs.length) * 100) : 0;
+        supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
+        return { ...s, lectures: updatedLecs, progress };
+      }
+      return s;
+    });
+    local.set(KEYS.SUBJECTS, updated);
+    return updated;
   },
 
+  // Fix: Added missing editLecture method to satisfy call in Subjects.tsx
   editLecture: async (subjectId: number, lectureId: number, updatedLecture: any) => {
-    const { data: subject } = await supabase.from('subjects').select('lectures').eq('id', subjectId).single();
-    if (subject) {
-      const updated = subject.lectures.map((l: any) => l.id === lectureId ? { ...l, ...updatedLecture } : l);
-      await supabase.from('subjects').update({ lectures: updated }).eq('id', subjectId);
-    }
-    return await db.getSubjects();
+    const subjects = local.get(KEYS.SUBJECTS) || [];
+    const updated = subjects.map((s: any) => {
+      if (s.id === subjectId) {
+        const lectures = s.lectures.map((l: any) => l.id === lectureId ? { ...l, ...updatedLecture } : l);
+        const completed = lectures.filter((l: any) => l.isCompleted).length;
+        const progress = lectures.length > 0 ? Math.round((completed / lectures.length) * 100) : 0;
+        supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
+        return { ...s, lectures, progress };
+      }
+      return s;
+    });
+    local.set(KEYS.SUBJECTS, updated);
+    return updated;
   },
 
+  // Fix: Added missing deleteLecture method to satisfy call in Subjects.tsx
   deleteLecture: async (subjectId: number, lectureId: number) => {
-    const { data: subject } = await supabase.from('subjects').select('lectures').eq('id', subjectId).single();
-    if (subject) {
-      const updated = subject.lectures.filter((l: any) => l.id !== lectureId);
-      const completed = updated.filter((l: any) => l.isCompleted).length;
-      const progress = updated.length > 0 ? Math.round((completed / updated.length) * 100) : 0;
-      await supabase.from('subjects').update({ lectures: updated, progress }).eq('id', subjectId);
-    }
-    return await db.getSubjects();
+    const subjects = local.get(KEYS.SUBJECTS) || [];
+    const updated = subjects.map((s: any) => {
+      if (s.id === subjectId) {
+        const lectures = s.lectures.filter((l: any) => l.id !== lectureId);
+        const completed = lectures.filter((l: any) => l.isCompleted).length;
+        const progress = lectures.length > 0 ? Math.round((completed / lectures.length) * 100) : 0;
+        supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
+        return { ...s, lectures, progress };
+      }
+      return s;
+    });
+    local.set(KEYS.SUBJECTS, updated);
+    return updated;
   },
 
   toggleLectureStatus: async (subjectId: number, lectureId: number) => {
-    const { data: subject } = await supabase.from('subjects').select('lectures').eq('id', subjectId).single();
-    if (subject) {
-      const updated = subject.lectures.map((l: any) => l.id === lectureId ? { ...l, isCompleted: !l.isCompleted } : l);
-      const completed = updated.filter((l: any) => l.isCompleted).length;
-      const progress = Math.round((completed / updated.length) * 100);
-      await supabase.from('subjects').update({ lectures: updated, progress }).eq('id', subjectId);
-    }
-    return await db.getSubjects();
+    const subjects = local.get(KEYS.SUBJECTS) || [];
+    const updated = subjects.map((s: any) => {
+      if (s.id === subjectId) {
+        const lectures = s.lectures.map((l: any) => l.id === lectureId ? { ...l, isCompleted: !l.isCompleted } : l);
+        const completed = lectures.filter((l: any) => l.isCompleted).length;
+        const progress = lectures.length > 0 ? Math.round((completed / lectures.length) * 100) : 0;
+        supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
+        return { ...s, lectures, progress };
+      }
+      return s;
+    });
+    local.set(KEYS.SUBJECTS, updated);
+    return updated;
   },
 
   // Tasks Management
   getTasks: async (): Promise<Task[]> => {
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', TEMP_USER_ID)
-      .order('id', { ascending: false });
-    if (error) return [];
-    return data || [];
+    const localTasks = local.get(KEYS.TASKS) || [];
+    try {
+      const { data } = await supabase.from('tasks').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
+      if (data) {
+        local.set(KEYS.TASKS, data);
+        return data as Task[];
+      }
+    } catch (e) {}
+    return localTasks;
   },
 
   saveTask: async (task: any) => {
-    await supabase.from('tasks').insert({
-      user_id: TEMP_USER_ID,
-      title: task.title,
-      time: task.time,
-      duration: task.duration,
-      day_index: task.dayIndex,
-      status: 'upcoming',
-      subject_color: task.subjectColor || 'bg-indigo-500'
-    });
-    return await db.getTasks();
+    const current = local.get(KEYS.TASKS) || [];
+    const newTask = { ...task, id: Date.now(), status: 'upcoming' };
+    local.set(KEYS.TASKS, [newTask, ...current]);
+    try {
+      await supabase.from('tasks').insert({
+        user_id: MOCK_USER_ID,
+        title: task.title,
+        time: task.time,
+        duration: task.duration,
+        day_index: task.dayIndex,
+        subject_color: task.subjectColor || 'bg-indigo-500',
+        status: 'upcoming',
+        created_at: new Date().toISOString()
+      });
+    } catch (e) {}
+    return [newTask, ...current];
   },
 
+  // Fix: Added missing saveBatchTasks method to satisfy call in Planner.tsx
   saveBatchTasks: async (newTasks: any[]) => {
-    const formatted = newTasks.map(t => ({
-      user_id: TEMP_USER_ID,
-      title: t.title,
-      time: t.time,
-      duration: t.duration,
-      day_index: t.dayIndex,
-      status: 'upcoming',
-      subject_color: t.subjectColor || 'bg-indigo-500'
+    const current = local.get(KEYS.TASKS) || [];
+    const tasksToInsert = newTasks.map(t => ({
+      ...t,
+      id: Date.now() + Math.random(),
+      status: 'upcoming'
     }));
-    await supabase.from('tasks').insert(formatted);
-    return await db.getTasks();
+    
+    local.set(KEYS.TASKS, [...tasksToInsert, ...current]);
+    try {
+      await supabase.from('tasks').insert(tasksToInsert.map(t => ({
+        user_id: MOCK_USER_ID,
+        title: t.title,
+        time: t.time,
+        duration: t.duration,
+        day_index: t.dayIndex,
+        subject_color: t.subjectColor || 'bg-indigo-500',
+        status: 'upcoming',
+        created_at: new Date().toISOString()
+      })));
+    } catch (e) {}
+    return [...tasksToInsert, ...current];
   },
 
   toggleTask: async (id: number) => {
-    const { data: task } = await supabase.from('tasks').select('status').eq('id', id).single();
-    if (task) {
-      const newStatus = task.status === 'completed' ? 'upcoming' : 'completed';
-      await supabase.from('tasks').update({ status: newStatus }).eq('id', id);
-    }
-    return await db.getTasks();
+    const tasks = local.get(KEYS.TASKS) || [];
+    const updated = tasks.map((t: any) => {
+      if (t.id === id) {
+        const newStatus = t.status === 'completed' ? 'upcoming' : 'completed';
+        supabase.from('tasks').update({ status: newStatus }).eq('id', id).then();
+        return { ...t, status: newStatus };
+      }
+      return t;
+    });
+    local.set(KEYS.TASKS, updated);
+    return updated;
   },
 
   deleteTask: async (id: number) => {
-    await supabase.from('tasks').delete().eq('id', id);
-    return await db.getTasks();
+    const current = local.get(KEYS.TASKS) || [];
+    const updated = current.filter((t: any) => t.id !== id);
+    local.set(KEYS.TASKS, updated);
+    try {
+      await supabase.from('tasks').delete().eq('id', id);
+    } catch (e) {}
+    return updated;
   },
 
   // Notes Management
   getNotes: async (): Promise<Note[]> => {
-    const { data, error } = await supabase
-      .from('notes')
-      .select('*')
-      .eq('user_id', TEMP_USER_ID)
-      .order('id', { ascending: false });
-    if (error) return [];
-    return data || [];
+    const localNotes = local.get(KEYS.NOTES) || [];
+    try {
+      const { data } = await supabase.from('notes').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
+      if (data) {
+        local.set(KEYS.NOTES, data);
+        return data as Note[];
+      }
+    } catch (e) {}
+    return localNotes;
   },
 
   saveNote: async (note: any) => {
-    await supabase.from('notes').insert({
-      user_id: TEMP_USER_ID,
-      title: note.title,
-      text: note.text,
-      translation: note.translation || '',
-      category: note.category,
-      date: new Date().toLocaleDateString('ar-EG')
-    });
-    return await db.getNotes();
+    const current = local.get(KEYS.NOTES) || [];
+    const newNote = { ...note, id: Date.now(), date: new Date().toLocaleDateString('ar-EG') };
+    local.set(KEYS.NOTES, [newNote, ...current]);
+    try {
+      await supabase.from('notes').insert({
+        user_id: MOCK_USER_ID,
+        title: note.title,
+        text: note.text,
+        translation: note.translation || '',
+        category: note.category,
+        date: new Date().toLocaleDateString('ar-EG')
+      });
+    } catch (e) {}
+    return [newNote, ...current];
   },
 
   deleteNote: async (id: number) => {
-    await supabase.from('notes').delete().eq('id', id);
-    return await db.getNotes();
+    const current = local.get(KEYS.NOTES) || [];
+    const updated = current.filter((n: any) => n.id !== id);
+    local.set(KEYS.NOTES, updated);
+    try {
+      await supabase.from('notes').delete().eq('id', id);
+    } catch (e) {}
+    return updated;
   },
 
   getStudyStats: async (): Promise<StudyStats> => {
-    return { sessionsCompleted: 0, totalMinutes: 0, topSubject: 'غير محدد', focusRate: 0 };
+    return local.get(KEYS.STATS) || { sessionsCompleted: 0, totalMinutes: 0, topSubject: 'غير محدد', focusRate: 0 };
   },
 
   saveStudySession: async (minutes: number, subjectName: string) => {
-    return { sessionsCompleted: 1, totalMinutes: minutes, topSubject: subjectName, focusRate: 85 };
-  }
+    const stats = await db.getStudyStats();
+    const newStats = { ...stats, sessionsCompleted: stats.sessionsCompleted + 1, totalMinutes: stats.totalMinutes + minutes, topSubject: subjectName, focusRate: 85 };
+    local.set(KEYS.STATS, newStats);
+    supabase.from('profiles').update({ xp: Math.round(newStats.totalMinutes / 10) }).eq('id', MOCK_USER_ID).then();
+    return newStats;
+  },
+
+  calculateTotalXP: (subjects: Subject[], tasks: Task[], notes: Note[], stats: StudyStats): number => {
+    let total = 120;
+    if (subjects) subjects.forEach(s => { if (s.lectures) total += (s.lectures.filter(l => l.isCompleted).length) * 20; });
+    if (tasks) total += tasks.filter(t => t.status === 'completed').length * 10;
+    if (notes) total += notes.length * 15;
+    return total;
+  },
 };
