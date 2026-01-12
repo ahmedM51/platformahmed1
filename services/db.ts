@@ -2,12 +2,14 @@
 import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase Configuration - New Project Credentials
-const supabaseUrl = 'https://cmaxutqmblvvghftouqx.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtYXh1dHFtYmx2dmdoZnRvdXF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NTkyNDksImV4cCI6MjA4MTEzNTI0OX0.a8VbYwNY6mYkCBMiSSwUVU-zThSQnvIBEeH4GT_i-Xk';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const getEnv = (key: string, fallback: string) => {
+  return process.env[key] || (window as any).process?.env?.[key] || fallback;
+};
 
-// ثابت لمعرف المستخدم بما أننا نستخدم نظام Auth وهمي حالياً
+const supabaseUrl = getEnv('SUPABASE_URL', 'https://cmaxutqmblvvghftouqx.supabase.co');
+const supabaseKey = getEnv('SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtYXh1dHFtYmx2dmdoZnRvdXF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NTkyNDksImV4cCI6MjA4MTEzNTI0OX0.a8VbYwNY6mYkCBMiSSwUVU-zThSQnvIBEeH4GT_i-Xk');
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 const KEYS = {
@@ -29,7 +31,6 @@ const local = {
 };
 
 export const db = {
-  // User Management
   saveUser: async (user: User) => {
     local.set(KEYS.USER, user);
     try {
@@ -39,20 +40,14 @@ export const db = {
         full_name: user.full_name,
         xp: user.xp || 120
       });
-    } catch (e) {
-      console.error("Supabase Error:", e);
-    }
+    } catch (e) {}
     return user;
   },
   
   getUser: async (): Promise<User | null> => {
     const localUser = local.get(KEYS.USER);
     try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', MOCK_USER_ID)
-        .maybeSingle();
+      const { data } = await supabase.from('profiles').select('*').eq('id', MOCK_USER_ID).maybeSingle();
       if (data) {
         local.set(KEYS.USER, data);
         return data as User;
@@ -61,14 +56,10 @@ export const db = {
     return localUser;
   },
 
-  // Subjects Management
   getSubjects: async (): Promise<Subject[]> => {
     const localData = local.get(KEYS.SUBJECTS) || [];
     try {
-      const { data } = await supabase
-        .from('subjects')
-        .select('*')
-        .eq('user_id', MOCK_USER_ID);
+      const { data } = await supabase.from('subjects').select('*').eq('user_id', MOCK_USER_ID);
       if (data) {
         local.set(KEYS.SUBJECTS, data);
         return data as Subject[];
@@ -79,16 +70,8 @@ export const db = {
   
   saveSubject: async (sub: Partial<Subject>) => {
     const current = local.get(KEYS.SUBJECTS) || [];
-    const newSub = { 
-      ...sub, 
-      id: Date.now(), 
-      progress: 0, 
-      lectures: [], 
-      user_id: MOCK_USER_ID
-    };
-    
+    const newSub = { ...sub, id: Date.now(), progress: 0, lectures: [], user_id: MOCK_USER_ID };
     local.set(KEYS.SUBJECTS, [...current, newSub]);
-
     try {
       await supabase.from('subjects').insert({
         user_id: MOCK_USER_ID,
@@ -98,9 +81,7 @@ export const db = {
         lectures: []
       });
       return await db.getSubjects();
-    } catch (e) {
-      console.error("Save Subject Error:", e);
-    }
+    } catch (e) {}
     return [...current, newSub] as Subject[];
   },
 
@@ -108,9 +89,7 @@ export const db = {
     const current = local.get(KEYS.SUBJECTS) || [];
     const updated = current.filter((s: any) => s.id !== id);
     local.set(KEYS.SUBJECTS, updated);
-    try {
-      await supabase.from('subjects').delete().eq('id', id);
-    } catch (e) {}
+    try { await supabase.from('subjects').delete().eq('id', id); } catch (e) {}
     return updated;
   },
 
@@ -131,7 +110,6 @@ export const db = {
     return updated;
   },
 
-  // Fix: Added missing editLecture method to satisfy call in Subjects.tsx
   editLecture: async (subjectId: number, lectureId: number, updatedLecture: any) => {
     const subjects = local.get(KEYS.SUBJECTS) || [];
     const updated = subjects.map((s: any) => {
@@ -148,7 +126,6 @@ export const db = {
     return updated;
   },
 
-  // Fix: Added missing deleteLecture method to satisfy call in Subjects.tsx
   deleteLecture: async (subjectId: number, lectureId: number) => {
     const subjects = local.get(KEYS.SUBJECTS) || [];
     const updated = subjects.map((s: any) => {
@@ -181,7 +158,6 @@ export const db = {
     return updated;
   },
 
-  // Tasks Management
   getTasks: async (): Promise<Task[]> => {
     const localTasks = local.get(KEYS.TASKS) || [];
     try {
@@ -213,15 +189,9 @@ export const db = {
     return [newTask, ...current];
   },
 
-  // Fix: Added missing saveBatchTasks method to satisfy call in Planner.tsx
   saveBatchTasks: async (newTasks: any[]) => {
     const current = local.get(KEYS.TASKS) || [];
-    const tasksToInsert = newTasks.map(t => ({
-      ...t,
-      id: Date.now() + Math.random(),
-      status: 'upcoming'
-    }));
-    
+    const tasksToInsert = newTasks.map(t => ({ ...t, id: Date.now() + Math.random(), status: 'upcoming' }));
     local.set(KEYS.TASKS, [...tasksToInsert, ...current]);
     try {
       await supabase.from('tasks').insert(tasksToInsert.map(t => ({
@@ -256,13 +226,10 @@ export const db = {
     const current = local.get(KEYS.TASKS) || [];
     const updated = current.filter((t: any) => t.id !== id);
     local.set(KEYS.TASKS, updated);
-    try {
-      await supabase.from('tasks').delete().eq('id', id);
-    } catch (e) {}
+    try { await supabase.from('tasks').delete().eq('id', id); } catch (e) {}
     return updated;
   },
 
-  // Notes Management
   getNotes: async (): Promise<Note[]> => {
     const localNotes = local.get(KEYS.NOTES) || [];
     try {
@@ -296,9 +263,7 @@ export const db = {
     const current = local.get(KEYS.NOTES) || [];
     const updated = current.filter((n: any) => n.id !== id);
     local.set(KEYS.NOTES, updated);
-    try {
-      await supabase.from('notes').delete().eq('id', id);
-    } catch (e) {}
+    try { await supabase.from('notes').delete().eq('id', id); } catch (e) {}
     return updated;
   },
 

@@ -41,7 +41,13 @@ export const AIAssistant: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) =
   const [quizLoading, setQuizLoading] = useState(false);
 
   useEffect(() => {
-    setSubjects(db.getSubjects());
+    // إصلاح: استخدام دالة async لجلب المواد بشكل صحيح
+    const loadSubjects = async () => {
+      const data = await db.getSubjects();
+      setSubjects(data);
+    };
+    loadSubjects();
+
     if (!(window as any).pdfjsLib) {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
@@ -309,7 +315,7 @@ export const AIAssistant: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) =
                 <button onClick={() => setShowLibrary(false)} className="w-12 h-12 flex items-center justify-center hover:bg-slate-100 rounded-2xl transition-all"><X size={24} /></button>
              </div>
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 flex-1 overflow-y-auto pb-10 custom-scrollbar">
-                {subjects.flatMap(s => s.lectures.map(l => (
+                {subjects.flatMap(s => (s.lectures || []).map(l => (
                   <button 
                     key={l.id} 
                     onClick={() => { setActiveContext({ title: l.title, data: l.content, type: 'text/plain' }); setShowLibrary(false); }} 
