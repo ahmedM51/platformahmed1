@@ -1,0 +1,8 @@
+{
+  "name": "منصة الطالب الذكي (Smart Student Platform)",
+  "description": "An advanced AI-powered educational platform for students featuring study planners, AI assistants, and progress tracking.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
