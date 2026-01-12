@@ -3,13 +3,19 @@ import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
 const getEnv = (key: string, fallback: string) => {
-  return process.env[key] || (window as any).process?.env?.[key] || fallback;
+  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
+  if (typeof window !== 'undefined' && (window as any).process?.env?.[key]) return (window as any).process.env[key];
+  return fallback;
 };
 
 const supabaseUrl = getEnv('SUPABASE_URL', 'https://cmaxutqmblvvghftouqx.supabase.co');
-const supabaseKey = getEnv('SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtYXh1dHFtYmx2dmdoZnRvdXF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NTkyNDksImV4cCI6MjA4MTEzNTI0OX0.a8VbYwNY6mYkCBMiSSwUVU-zThSQnvIBEeH4GT_i-Xk');
+const supabaseKey = getEnv('SUPABASE_ANON_KEY', '');
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// إنشاء العميل فقط إذا توفرت البيانات، وإلا استخدامه كـ Mock للعمليات المحلية
+const supabase = (supabaseUrl && supabaseKey) 
+  ? createClient(supabaseUrl, supabaseKey) 
+  : null;
+
 const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 const KEYS = {
@@ -22,49 +28,58 @@ const KEYS = {
 
 const local = {
   get: (key: string) => {
+    if (typeof localStorage === 'undefined') return null;
     const val = localStorage.getItem(key);
     return val ? JSON.parse(val) : null;
   },
   set: (key: string, val: any) => {
-    localStorage.setItem(key, JSON.stringify(val));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(val));
+    }
   }
 };
 
 export const db = {
   saveUser: async (user: User) => {
     local.set(KEYS.USER, user);
-    try {
-      await supabase.from('profiles').upsert({
-        id: MOCK_USER_ID,
-        email: user.email,
-        full_name: user.full_name,
-        xp: user.xp || 120
-      });
-    } catch (e) {}
+    if (supabase) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: MOCK_USER_ID,
+          email: user.email,
+          full_name: user.full_name,
+          xp: user.xp || 120
+        });
+      } catch (e) {}
+    }
     return user;
   },
   
   getUser: async (): Promise<User | null> => {
     const localUser = local.get(KEYS.USER);
-    try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', MOCK_USER_ID).maybeSingle();
-      if (data) {
-        local.set(KEYS.USER, data);
-        return data as User;
-      }
-    } catch (e) {}
+    if (supabase) {
+      try {
+        const { data } = await supabase.from('profiles').select('*').eq('id', MOCK_USER_ID).maybeSingle();
+        if (data) {
+          local.set(KEYS.USER, data);
+          return data as User;
+        }
+      } catch (e) {}
+    }
     return localUser;
   },
 
   getSubjects: async (): Promise<Subject[]> => {
     const localData = local.get(KEYS.SUBJECTS) || [];
-    try {
-      const { data } = await supabase.from('subjects').select('*').eq('user_id', MOCK_USER_ID);
-      if (data) {
-        local.set(KEYS.SUBJECTS, data);
-        return data as Subject[];
-      }
-    } catch (e) {}
+    if (supabase) {
+      try {
+        const { data } = await supabase.from('subjects').select('*').eq('user_id', MOCK_USER_ID);
+        if (data && data.length > 0) {
+          local.set(KEYS.SUBJECTS, data);
+          return data as Subject[];
+        }
+      } catch (e) {}
+    }
     return localData;
   },
   
@@ -72,16 +87,18 @@ export const db = {
     const current = local.get(KEYS.SUBJECTS) || [];
     const newSub = { ...sub, id: Date.now(), progress: 0, lectures: [], user_id: MOCK_USER_ID };
     local.set(KEYS.SUBJECTS, [...current, newSub]);
-    try {
-      await supabase.from('subjects').insert({
-        user_id: MOCK_USER_ID,
-        name: sub.name,
-        color: sub.color,
-        progress: 0,
-        lectures: []
-      });
-      return await db.getSubjects();
-    } catch (e) {}
+    if (supabase) {
+      try {
+        await supabase.from('subjects').insert({
+          user_id: MOCK_USER_ID,
+          name: sub.name,
+          color: sub.color,
+          progress: 0,
+          lectures: []
+        });
+        return await db.getSubjects();
+      } catch (e) {}
+    }
     return [...current, newSub] as Subject[];
   },
 
@@ -89,7 +106,9 @@ export const db = {
     const current = local.get(KEYS.SUBJECTS) || [];
     const updated = current.filter((s: any) => s.id !== id);
     local.set(KEYS.SUBJECTS, updated);
-    try { await supabase.from('subjects').delete().eq('id', id); } catch (e) {}
+    if (supabase) {
+      try { await supabase.from('subjects').delete().eq('id', id); } catch (e) {}
+    }
     return updated;
   },
 
@@ -101,7 +120,7 @@ export const db = {
         const updatedLecs = [...(s.lectures || []), newLec];
         const completed = updatedLecs.filter((l: any) => l.isCompleted).length;
         const progress = updatedLecs.length > 0 ? Math.round((completed / updatedLecs.length) * 100) : 0;
-        supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
+        if (supabase) supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
         return { ...s, lectures: updatedLecs, progress };
       }
       return s;
@@ -117,7 +136,7 @@ export const db = {
         const lectures = s.lectures.map((l: any) => l.id === lectureId ? { ...l, ...updatedLecture } : l);
         const completed = lectures.filter((l: any) => l.isCompleted).length;
         const progress = lectures.length > 0 ? Math.round((completed / lectures.length) * 100) : 0;
-        supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
+        if (supabase) supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
         return { ...s, lectures, progress };
       }
       return s;
@@ -133,7 +152,7 @@ export const db = {
         const lectures = s.lectures.filter((l: any) => l.id !== lectureId);
         const completed = lectures.filter((l: any) => l.isCompleted).length;
         const progress = lectures.length > 0 ? Math.round((completed / lectures.length) * 100) : 0;
-        supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
+        if (supabase) supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
         return { ...s, lectures, progress };
       }
       return s;
@@ -149,7 +168,7 @@ export const db = {
         const lectures = s.lectures.map((l: any) => l.id === lectureId ? { ...l, isCompleted: !l.isCompleted } : l);
         const completed = lectures.filter((l: any) => l.isCompleted).length;
         const progress = lectures.length > 0 ? Math.round((completed / lectures.length) * 100) : 0;
-        supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
+        if (supabase) supabase.from('subjects').update({ lectures, progress }).eq('id', subjectId).then();
         return { ...s, lectures, progress };
       }
       return s;
@@ -160,13 +179,15 @@ export const db = {
 
   getTasks: async (): Promise<Task[]> => {
     const localTasks = local.get(KEYS.TASKS) || [];
-    try {
-      const { data } = await supabase.from('tasks').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
-      if (data) {
-        local.set(KEYS.TASKS, data);
-        return data as Task[];
-      }
-    } catch (e) {}
+    if (supabase) {
+      try {
+        const { data } = await supabase.from('tasks').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
+        if (data) {
+          local.set(KEYS.TASKS, data);
+          return data as Task[];
+        }
+      } catch (e) {}
+    }
     return localTasks;
   },
 
@@ -174,18 +195,20 @@ export const db = {
     const current = local.get(KEYS.TASKS) || [];
     const newTask = { ...task, id: Date.now(), status: 'upcoming' };
     local.set(KEYS.TASKS, [newTask, ...current]);
-    try {
-      await supabase.from('tasks').insert({
-        user_id: MOCK_USER_ID,
-        title: task.title,
-        time: task.time,
-        duration: task.duration,
-        day_index: task.dayIndex,
-        subject_color: task.subjectColor || 'bg-indigo-500',
-        status: 'upcoming',
-        created_at: new Date().toISOString()
-      });
-    } catch (e) {}
+    if (supabase) {
+      try {
+        await supabase.from('tasks').insert({
+          user_id: MOCK_USER_ID,
+          title: task.title,
+          time: task.time,
+          duration: task.duration,
+          day_index: task.dayIndex,
+          subject_color: task.subjectColor || 'bg-indigo-500',
+          status: 'upcoming',
+          created_at: new Date().toISOString()
+        });
+      } catch (e) {}
+    }
     return [newTask, ...current];
   },
 
@@ -193,18 +216,20 @@ export const db = {
     const current = local.get(KEYS.TASKS) || [];
     const tasksToInsert = newTasks.map(t => ({ ...t, id: Date.now() + Math.random(), status: 'upcoming' }));
     local.set(KEYS.TASKS, [...tasksToInsert, ...current]);
-    try {
-      await supabase.from('tasks').insert(tasksToInsert.map(t => ({
-        user_id: MOCK_USER_ID,
-        title: t.title,
-        time: t.time,
-        duration: t.duration,
-        day_index: t.dayIndex,
-        subject_color: t.subjectColor || 'bg-indigo-500',
-        status: 'upcoming',
-        created_at: new Date().toISOString()
-      })));
-    } catch (e) {}
+    if (supabase) {
+      try {
+        await supabase.from('tasks').insert(tasksToInsert.map(t => ({
+          user_id: MOCK_USER_ID,
+          title: t.title,
+          time: t.time,
+          duration: t.duration,
+          day_index: t.dayIndex,
+          subject_color: t.subjectColor || 'bg-indigo-500',
+          status: 'upcoming',
+          created_at: new Date().toISOString()
+        })));
+      } catch (e) {}
+    }
     return [...tasksToInsert, ...current];
   },
 
@@ -213,7 +238,7 @@ export const db = {
     const updated = tasks.map((t: any) => {
       if (t.id === id) {
         const newStatus = t.status === 'completed' ? 'upcoming' : 'completed';
-        supabase.from('tasks').update({ status: newStatus }).eq('id', id).then();
+        if (supabase) supabase.from('tasks').update({ status: newStatus }).eq('id', id).then();
         return { ...t, status: newStatus };
       }
       return t;
@@ -226,19 +251,23 @@ export const db = {
     const current = local.get(KEYS.TASKS) || [];
     const updated = current.filter((t: any) => t.id !== id);
     local.set(KEYS.TASKS, updated);
-    try { await supabase.from('tasks').delete().eq('id', id); } catch (e) {}
+    if (supabase) {
+      try { await supabase.from('tasks').delete().eq('id', id); } catch (e) {}
+    }
     return updated;
   },
 
   getNotes: async (): Promise<Note[]> => {
     const localNotes = local.get(KEYS.NOTES) || [];
-    try {
-      const { data } = await supabase.from('notes').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
-      if (data) {
-        local.set(KEYS.NOTES, data);
-        return data as Note[];
-      }
-    } catch (e) {}
+    if (supabase) {
+      try {
+        const { data } = await supabase.from('notes').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
+        if (data) {
+          local.set(KEYS.NOTES, data);
+          return data as Note[];
+        }
+      } catch (e) {}
+    }
     return localNotes;
   },
 
@@ -246,16 +275,18 @@ export const db = {
     const current = local.get(KEYS.NOTES) || [];
     const newNote = { ...note, id: Date.now(), date: new Date().toLocaleDateString('ar-EG') };
     local.set(KEYS.NOTES, [newNote, ...current]);
-    try {
-      await supabase.from('notes').insert({
-        user_id: MOCK_USER_ID,
-        title: note.title,
-        text: note.text,
-        translation: note.translation || '',
-        category: note.category,
-        date: new Date().toLocaleDateString('ar-EG')
-      });
-    } catch (e) {}
+    if (supabase) {
+      try {
+        await supabase.from('notes').insert({
+          user_id: MOCK_USER_ID,
+          title: note.title,
+          text: note.text,
+          translation: note.translation || '',
+          category: note.category,
+          date: new Date().toLocaleDateString('ar-EG')
+        });
+      } catch (e) {}
+    }
     return [newNote, ...current];
   },
 
@@ -263,7 +294,9 @@ export const db = {
     const current = local.get(KEYS.NOTES) || [];
     const updated = current.filter((n: any) => n.id !== id);
     local.set(KEYS.NOTES, updated);
-    try { await supabase.from('notes').delete().eq('id', id); } catch (e) {}
+    if (supabase) {
+      try { await supabase.from('notes').delete().eq('id', id); } catch (e) {}
+    }
     return updated;
   },
 
@@ -275,7 +308,7 @@ export const db = {
     const stats = await db.getStudyStats();
     const newStats = { ...stats, sessionsCompleted: stats.sessionsCompleted + 1, totalMinutes: stats.totalMinutes + minutes, topSubject: subjectName, focusRate: 85 };
     local.set(KEYS.STATS, newStats);
-    supabase.from('profiles').update({ xp: Math.round(newStats.totalMinutes / 10) }).eq('id', MOCK_USER_ID).then();
+    if (supabase) supabase.from('profiles').update({ xp: Math.round(newStats.totalMinutes / 10) }).eq('id', MOCK_USER_ID).then();
     return newStats;
   },
 
