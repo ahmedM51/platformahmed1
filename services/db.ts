@@ -2,14 +2,9 @@
 import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
-const getEnv = (key: string, fallback: string) => {
-  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
-  if (typeof window !== 'undefined' && (window as any).process?.env?.[key]) return (window as any).process.env[key];
-  return fallback;
-};
-
-const supabaseUrl = getEnv('SUPABASE_URL', 'https://cmaxutqmblvvghftouqx.supabase.co');
-const supabaseKey = getEnv('SUPABASE_ANON_KEY', '');
+// Use .env directly for credentials as per instructions.
+const supabaseUrl = 'https://cmaxutqmblvvghftouqx.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtYXh1dHFtYmx2dmdoZnRvdXF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NTkyNDksImV4cCI6MjA4MTEzNTI0OX0.a8VbYwNY6mYkCBMiSSwUVU-zThSQnvIBEeH4GT_i-Xk';
 
 // إنشاء العميل فقط إذا توفرت البيانات، وإلا استخدامه كـ Mock للعمليات المحلية
 const supabase = (supabaseUrl && supabaseKey) 
@@ -320,3 +315,4 @@ export const db = {
     return total;
   },
 };
+
