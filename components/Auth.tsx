@@ -27,7 +27,6 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, lang, setLang, isDark, setI
     e.preventDefault();
     setIsLoading(true);
     
-    // محاكاة تأخير بسيط للاتصال
     const userData: User = {
       id: '00000000-0000-0000-0000-000000000001',
       email,
