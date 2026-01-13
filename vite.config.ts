@@ -8,7 +8,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     base: '/',  // Fixed: Always root for Vercel
     define: {
-      'process.env': {
+      'process.env': { 
+         API_KEY: JSON.stringify(process.env.API_KEY || ''),
         SUPABASE_URL: JSON.stringify(env.VITE_SUPABASE_URL || ''),
         SUPABASE_ANON_KEY: JSON.stringify(env.VITE_SUPABASE_ANON_KEY || '')
       },
