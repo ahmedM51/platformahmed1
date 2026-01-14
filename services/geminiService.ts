@@ -2,11 +2,11 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const getAIResponse = async (prompt: string, context: string = "عام"): Promise<string> => {
-  // استخدام المفتاح الجديد المحقون برمجياً
+  // المفتاح الجديد الذي زودتنا به
   const apiKey = window.process?.env?.API_KEY || 'AIzaSyBNkAIB1P5lFmfrBKTCf9oPtSxcWvJCBpw';
   
   if (!apiKey || apiKey === 'undefined') {
-    return "عذراً، مفتاح الـ AI غير مكوّن بشكل صحيح في النظام.";
+    return "عذراً، مفتاح الـ AI مفقود. يرجى مراجعة إعدادات Vercel.";
   }
 
   try {
@@ -16,18 +16,21 @@ export const getAIResponse = async (prompt: string, context: string = "عام"):
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: `أنت "المعلم الذكي" في منصة الطالب الذكي. مهمتك مساعدة الطلاب في فهم المناهج الدراسية، تبسيط المعلومات، وتنظيم الوقت. السياق الحالي: ${context}. يرجى الإجابة بأسلوب تعليمي، مشجع، وباللغة العربية الفصحى البسيطة.`,
-        temperature: 0.8,
-        topP: 0.95,
+        systemInstruction: `أنت "المعلم الذكي". مهمتك مساعدة الطلاب في فهم المناهج الدراسية، تبسيط المعلومات، وتنظيم الوقت. السياق: ${context}. أجب بأسلوب تعليمي مشجع بالعربية.`,
+        temperature: 0.7,
+        topP: 0.9,
       },
     });
 
-    return response.text || "عذراً، لم أستطع معالجة هذا الطلب حالياً.";
+    return response.text || "عذراً، لم أستطع توليد رد حالياً.";
   } catch (error: any) {
     console.error("Gemini AI Error:", error);
-    if (error.message?.includes("Quota exceeded") || error.message?.includes("429")) {
-      return "عذراً، تم الوصول للحد الأقصى لطلبات الذكاء الاصطناعي المجانية حالياً. يرجى المحاولة بعد قليل.";
+    
+    // التعامل مع خطأ الكوتا (429)
+    if (error.message?.includes("429") || error.message?.includes("Quota")) {
+      return "تم الوصول للحد الأقصى للطلبات المجانية اليوم. يرجى المحاولة مرة أخرى غداً أو استخدام مفتاح API مدفوع.";
     }
-    return "حدث خطأ تقني في الاتصال بالذكاء الاصطناعي. يرجى المحاولة مرة أخرى لاحقاً.";
+    
+    return "حدث خطأ في الاتصال بالمعلم الذكي. يرجى التأكد من اتصالك بالإنترنت.";
   }
 };
