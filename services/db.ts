@@ -1,19 +1,16 @@
 
 import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { CONFIG } from './config';
 
-// الحصول على المفاتيح من الـ Shim أو البيئة
-const supabaseUrl = window.process?.env?.SUPABASE_URL || 'https://cmaxutqmblvvghftouqx.supabase.co';
-const supabaseKey = window.process?.env?.SUPABASE_ANON_KEY || '';
-
-// محاولة إنشاء العميل، ولكن لن نسمح له بإيقاف التطبيق إذا فشل
+// محاولة الاتصال بـ Supabase
 let supabase: SupabaseClient | null = null;
 try {
-  if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) {
-    supabase = createClient(supabaseUrl, supabaseKey);
+  if (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) {
+    supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
   }
 } catch (e) {
-  console.warn("Supabase connection failed, using local storage instead.");
+  console.warn("Remote database unavailable. Running in local mode.");
 }
 
 const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -40,7 +37,7 @@ const local = {
   }
 };
 
-// محرك البيانات الذكي: يعطي أولوية للاستقرار. إذا فشل Supabase (401)، يستخدم المحلي فوراً.
+// محرك البيانات الهجين: يضمن عمل الموقع 100% باستخدام LocalStorage
 export const db = {
   saveUser: async (user: User) => {
     local.set(KEYS.USER, user);
@@ -76,7 +73,7 @@ export const db = {
     try {
       if (supabase) {
         const { data, error } = await supabase.from('subjects').select('*').eq('user_id', MOCK_USER_ID);
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
           local.set(KEYS.SUBJECTS, data);
           return data as Subject[];
         }
@@ -89,14 +86,14 @@ export const db = {
     const current = await db.getSubjects();
     const newSub: Subject = {
       id: Date.now(),
-      name: sub.name || 'مادة بدون عنوان',
+      name: sub.name || 'مادة جديدة',
       color: sub.color || 'bg-indigo-500',
       progress: 0,
       lectures: [],
       ...sub
     };
-    const updatedList = [...current, newSub];
-    local.set(KEYS.SUBJECTS, updatedList);
+    const updated = [...current, newSub];
+    local.set(KEYS.SUBJECTS, updated);
     try {
       if (supabase) {
         await supabase.from('subjects').insert({
@@ -108,7 +105,7 @@ export const db = {
         });
       }
     } catch (e) {}
-    return updatedList;
+    return updated;
   },
 
   deleteSubject: async (id: number) => {
@@ -127,9 +124,7 @@ export const db = {
         const updatedLecs = [...(s.lectures || []), newLec];
         const completed = updatedLecs.filter((l: any) => l.isCompleted).length;
         const progress = updatedLecs.length > 0 ? Math.round((completed / updatedLecs.length) * 100) : 0;
-        if (supabase) {
-          supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
-        }
+        if (supabase) supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
         return { ...s, lectures: updatedLecs, progress };
       }
       return s;
@@ -142,14 +137,10 @@ export const db = {
     const subjects = await db.getSubjects();
     const updated = subjects.map((s: any) => {
       if (s.id === subjectId) {
-        const updatedLecs = (s.lectures || []).map((l: any) => 
-          l.id === lectureId ? { ...l, ...lectureUpdate } : l
-        );
+        const updatedLecs = (s.lectures || []).map((l: any) => l.id === lectureId ? { ...l, ...lectureUpdate } : l);
         const completed = updatedLecs.filter((l: any) => l.isCompleted).length;
         const progress = updatedLecs.length > 0 ? Math.round((completed / updatedLecs.length) * 100) : 0;
-        if (supabase) {
-          supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
-        }
+        if (supabase) supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
         return { ...s, lectures: updatedLecs, progress };
       }
       return s;
@@ -165,9 +156,7 @@ export const db = {
         const updatedLecs = (s.lectures || []).filter((l: any) => l.id !== lectureId);
         const completed = updatedLecs.filter((l: any) => l.isCompleted).length;
         const progress = updatedLecs.length > 0 ? Math.round((completed / updatedLecs.length) * 100) : 0;
-        if (supabase) {
-          supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
-        }
+        if (supabase) supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
         return { ...s, lectures: updatedLecs, progress };
       }
       return s;
@@ -180,14 +169,10 @@ export const db = {
     const subjects = await db.getSubjects();
     const updated = subjects.map((s: any) => {
       if (s.id === subjectId) {
-        const updatedLecs = (s.lectures || []).map((l: any) => 
-          l.id === lectureId ? { ...l, isCompleted: !l.isCompleted } : l
-        );
+        const updatedLecs = (s.lectures || []).map((l: any) => l.id === lectureId ? { ...l, isCompleted: !l.isCompleted } : l);
         const completed = updatedLecs.filter((l: any) => l.isCompleted).length;
         const progress = updatedLecs.length > 0 ? Math.round((completed / updatedLecs.length) * 100) : 0;
-        if (supabase) {
-          supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
-        }
+        if (supabase) supabase.from('subjects').update({ lectures: updatedLecs, progress }).eq('id', subjectId).then();
         return { ...s, lectures: updatedLecs, progress };
       }
       return s;
@@ -201,7 +186,7 @@ export const db = {
     try {
       if (supabase) {
         const { data, error } = await supabase.from('tasks').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
           local.set(KEYS.TASKS, data);
           return data as Task[];
         }
@@ -224,8 +209,7 @@ export const db = {
           duration: task.duration,
           day_index: task.dayIndex,
           subject_color: task.subjectColor || 'bg-indigo-500',
-          status: 'upcoming',
-          created_at: new Date().toISOString()
+          status: 'upcoming'
         });
       }
     } catch (e) {}
@@ -234,26 +218,20 @@ export const db = {
 
   saveBatchTasks: async (newTasks: any[]) => {
     const current = await db.getTasks();
-    const processed = newTasks.map(t => ({ 
-      ...t, 
-      id: Date.now() + Math.random(), 
-      status: 'upcoming' 
-    }));
+    const processed = newTasks.map(t => ({ ...t, id: Date.now() + Math.random(), status: 'upcoming' }));
     const updated = [...processed, ...current];
     local.set(KEYS.TASKS, updated);
     try {
       if (supabase) {
-        const toInsert = processed.map(t => ({
+        await supabase.from('tasks').insert(processed.map(t => ({
           user_id: MOCK_USER_ID,
           title: t.title,
           time: t.time,
           duration: t.duration,
           day_index: t.dayIndex,
           subject_color: t.subjectColor || 'bg-indigo-500',
-          status: 'upcoming',
-          created_at: new Date().toISOString()
-        }));
-        await supabase.from('tasks').insert(toInsert);
+          status: 'upcoming'
+        })));
       }
     } catch (e) {}
     return updated;
@@ -261,9 +239,7 @@ export const db = {
 
   toggleTask: async (id: number) => {
     const current = await db.getTasks();
-    const updated = current.map((t: any) => 
-      t.id === id ? { ...t, status: t.status === 'completed' ? 'upcoming' : 'completed' } : t
-    );
+    const updated = current.map((t: any) => t.id === id ? { ...t, status: t.status === 'completed' ? 'upcoming' : 'completed' } : t);
     local.set(KEYS.TASKS, updated);
     try {
       if (supabase) {
@@ -278,11 +254,7 @@ export const db = {
     const current = await db.getTasks();
     const updated = current.filter((t: any) => t.id !== id);
     local.set(KEYS.TASKS, updated);
-    try {
-      if (supabase) {
-        await supabase.from('tasks').delete().eq('id', id);
-      }
-    } catch (e) {}
+    try { if (supabase) await supabase.from('tasks').delete().eq('id', id); } catch (e) {}
     return updated;
   },
 
@@ -291,7 +263,7 @@ export const db = {
     try {
       if (supabase) {
         const { data, error } = await supabase.from('notes').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
           local.set(KEYS.NOTES, data);
           return data as Note[];
         }
