@@ -5,12 +5,12 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // Vite replaces these values during build time
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || 'AIzaSyCQnAWlCFC5FIucZA1D9pPGPYY_sXPhg_k'),
-    'process.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL || 'https://pxmhwwovxrnefiryywva.supabase.co'),
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || 'AIzaSyC3wSrCQG00QvuFtPIXJnvzF8-UH5iXO0Y'),
+    'process.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL || 'https://cmaxutqmblvvghftouqx.supabase.co'),
     'process.env.SUPABASE_ANON_KEY': JSON.stringify(process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4bWh3d292eHJuZWZpcnl5d3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MzgzNjQsImV4cCI6MjA3MjAxNDM2NH0.FqzkWel93icaJ781ZCPhvzfVJu4iwqCa3hxV3AKuRlA'),
     'global': 'window',
-    'process.version': JSON.stringify('v16.0.0')
+    'process.version': JSON.stringify('v16.0.0'),
+    'process.env': '{}'
   },
   server: {
     port: 3000
