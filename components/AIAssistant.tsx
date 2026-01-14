@@ -41,7 +41,6 @@ export const AIAssistant: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) =
   const [quizLoading, setQuizLoading] = useState(false);
 
   useEffect(() => {
-    // إصلاح: استخدام دالة async لجلب المواد بشكل صحيح
     const loadSubjects = async () => {
       const data = await db.getSubjects();
       setSubjects(data);

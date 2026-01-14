@@ -11,8 +11,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.all.min.js"></script>
     <script>
-      // حماية ضد أخطاء البيئة في Vercel
-      window.process = { env: { NODE_ENV: 'production' } };
+      // حماية ضد أخطاء البيئة لضمان ثبات الاستضافة
+      window.process = { 
+        env: { 
+          NODE_ENV: 'production',
+          API_KEY: 'AIzaSyBDReabbWtJPI31sPz6XHZ-vWT19vY7jCI'
+        } 
+      };
       
       tailwind.config = {
         darkMode: 'class',
@@ -41,11 +46,12 @@
     "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.90.1",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite": "https://esm.sh/vite@^7.3.1"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
     <div id="root"></div>

@@ -3,14 +3,18 @@ import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from './config';
 
-// محاولة الاتصال بـ Supabase
+// التحقق من صحة المفاتيح قبل محاولة الاتصال لمنع أخطاء 401 التي تعطل المتصفح
+const isSupabaseReady = CONFIG.SUPABASE_URL && CONFIG.SUPABASE_URL.startsWith('http') && CONFIG.SUPABASE_ANON_KEY;
+
 let supabase: SupabaseClient | null = null;
-try {
-  if (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) {
-    supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+if (isSupabaseReady) {
+  try {
+    supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
+  } catch (e) {
+    console.warn("Supabase integration skipped - Using Local Storage mode.");
   }
-} catch (e) {
-  console.warn("Remote database unavailable. Running in local mode.");
 }
 
 const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -37,48 +41,48 @@ const local = {
   }
 };
 
-// محرك البيانات الهجين: يضمن عمل الموقع 100% باستخدام LocalStorage
+// نظام البيانات الهجين: يضمن عمل الموقع 100% حتى لو تعطلت السحابة
 export const db = {
   saveUser: async (user: User) => {
     local.set(KEYS.USER, user);
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         await supabase.from('profiles').upsert({
           id: MOCK_USER_ID,
           email: user.email,
           full_name: user.full_name,
           xp: user.xp || 120
         });
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return user;
   },
   
   getUser: async (): Promise<User | null> => {
     const localUser = local.get(KEYS.USER);
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         const { data, error } = await supabase.from('profiles').select('*').eq('id', MOCK_USER_ID).maybeSingle();
         if (data && !error) {
           local.set(KEYS.USER, data);
           return data as User;
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return localUser;
   },
 
   getSubjects: async (): Promise<Subject[]> => {
     const localData = local.get(KEYS.SUBJECTS) || [];
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         const { data, error } = await supabase.from('subjects').select('*').eq('user_id', MOCK_USER_ID);
         if (!error && data && data.length > 0) {
           local.set(KEYS.SUBJECTS, data);
           return data as Subject[];
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return localData;
   },
   
@@ -94,8 +98,8 @@ export const db = {
     };
     const updated = [...current, newSub];
     local.set(KEYS.SUBJECTS, updated);
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         await supabase.from('subjects').insert({
           user_id: MOCK_USER_ID,
           name: newSub.name,
@@ -103,8 +107,8 @@ export const db = {
           progress: 0,
           lectures: []
         });
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return updated;
   },
 
@@ -112,7 +116,9 @@ export const db = {
     const current = await db.getSubjects();
     const updated = current.filter((s: any) => s.id !== id);
     local.set(KEYS.SUBJECTS, updated);
-    try { if (supabase) await supabase.from('subjects').delete().eq('id', id); } catch (e) {}
+    if (supabase) {
+      try { await supabase.from('subjects').delete().eq('id', id); } catch (e) {}
+    }
     return updated;
   },
 
@@ -183,15 +189,15 @@ export const db = {
 
   getTasks: async (): Promise<Task[]> => {
     const localTasks = local.get(KEYS.TASKS) || [];
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         const { data, error } = await supabase.from('tasks').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
         if (!error && data && data.length > 0) {
           local.set(KEYS.TASKS, data);
           return data as Task[];
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return localTasks;
   },
 
@@ -200,8 +206,8 @@ export const db = {
     const newTask = { ...task, id: Date.now(), status: 'upcoming' };
     const updated = [newTask, ...current];
     local.set(KEYS.TASKS, updated);
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         await supabase.from('tasks').insert({
           user_id: MOCK_USER_ID,
           title: task.title,
@@ -211,8 +217,8 @@ export const db = {
           subject_color: task.subjectColor || 'bg-indigo-500',
           status: 'upcoming'
         });
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return updated;
   },
 
@@ -221,8 +227,8 @@ export const db = {
     const processed = newTasks.map(t => ({ ...t, id: Date.now() + Math.random(), status: 'upcoming' }));
     const updated = [...processed, ...current];
     local.set(KEYS.TASKS, updated);
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         await supabase.from('tasks').insert(processed.map(t => ({
           user_id: MOCK_USER_ID,
           title: t.title,
@@ -232,8 +238,8 @@ export const db = {
           subject_color: t.subjectColor || 'bg-indigo-500',
           status: 'upcoming'
         })));
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return updated;
   },
 
@@ -241,12 +247,12 @@ export const db = {
     const current = await db.getTasks();
     const updated = current.map((t: any) => t.id === id ? { ...t, status: t.status === 'completed' ? 'upcoming' : 'completed' } : t);
     local.set(KEYS.TASKS, updated);
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         const task = updated.find((t: any) => t.id === id);
         await supabase.from('tasks').update({ status: task.status }).eq('id', id);
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return updated;
   },
 
@@ -254,21 +260,23 @@ export const db = {
     const current = await db.getTasks();
     const updated = current.filter((t: any) => t.id !== id);
     local.set(KEYS.TASKS, updated);
-    try { if (supabase) await supabase.from('tasks').delete().eq('id', id); } catch (e) {}
+    if (supabase) {
+      try { await supabase.from('tasks').delete().eq('id', id); } catch (e) {}
+    }
     return updated;
   },
 
   getNotes: async (): Promise<Note[]> => {
     const localNotes = local.get(KEYS.NOTES) || [];
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         const { data, error } = await supabase.from('notes').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
         if (!error && data && data.length > 0) {
           local.set(KEYS.NOTES, data);
           return data as Note[];
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return localNotes;
   },
 
@@ -277,8 +285,8 @@ export const db = {
     const newNote = { ...note, id: Date.now(), date: new Date().toLocaleDateString('ar-EG') };
     const updated = [newNote, ...current];
     local.set(KEYS.NOTES, updated);
-    try {
-      if (supabase) {
+    if (supabase) {
+      try {
         await supabase.from('notes').insert({
           user_id: MOCK_USER_ID,
           title: note.title,
@@ -287,8 +295,8 @@ export const db = {
           category: note.category,
           date: new Date().toLocaleDateString('ar-EG')
         });
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
     return updated;
   },
 
@@ -296,7 +304,9 @@ export const db = {
     const current = await db.getNotes();
     const updated = current.filter((n: any) => n.id !== id);
     local.set(KEYS.NOTES, updated);
-    try { if (supabase) await supabase.from('notes').delete().eq('id', id); } catch (e) {}
+    if (supabase) {
+      try { await supabase.from('notes').delete().eq('id', id); } catch (e) {}
+    }
     return updated;
   },
 
