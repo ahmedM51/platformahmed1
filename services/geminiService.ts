@@ -1,36 +1,36 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { CONFIG } from "./config";
 
 export const getAIResponse = async (prompt: string, context: string = "عام"): Promise<string> => {
-  // المفتاح الجديد الذي زودتنا به
-  const apiKey = window.process?.env?.API_KEY || 'AIzaSyBNkAIB1P5lFmfrBKTCf9oPtSxcWvJCBpw';
+  const apiKey = CONFIG.GEMINI_API_KEY;
   
-  if (!apiKey || apiKey === 'undefined') {
-    return "عذراً، مفتاح الـ AI مفقود. يرجى مراجعة إعدادات Vercel.";
+  if (!apiKey) {
+    return "عذراً، نظام الذكاء الاصطناعي غير جاهز حالياً.";
   }
 
   try {
     const ai = new GoogleGenAI({ apiKey });
     
+    // استخدام موديل Gemini 3 Flash لضمان أسرع استجابة وأقل استهلاك للكوتا
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: `أنت "المعلم الذكي". مهمتك مساعدة الطلاب في فهم المناهج الدراسية، تبسيط المعلومات، وتنظيم الوقت. السياق: ${context}. أجب بأسلوب تعليمي مشجع بالعربية.`,
-        temperature: 0.7,
+        systemInstruction: `أنت "المعلم الذكي" في منصة الطالب الذكي. مهمتك هي المساعدة التعليمية الاحترافية في سياق: ${context}. أجب باللغة العربية بأسلوب تعليمي مشجع ومبسط.`,
+        temperature: 0.75,
         topP: 0.9,
       },
     });
 
-    return response.text || "عذراً، لم أستطع توليد رد حالياً.";
+    return response.text || "عذراً، لم أستطع صياغة رد مناسب حالياً.";
   } catch (error: any) {
-    console.error("Gemini AI Error:", error);
+    console.error("Gemini Critical Error:", error);
     
-    // التعامل مع خطأ الكوتا (429)
     if (error.message?.includes("429") || error.message?.includes("Quota")) {
-      return "تم الوصول للحد الأقصى للطلبات المجانية اليوم. يرجى المحاولة مرة أخرى غداً أو استخدام مفتاح API مدفوع.";
+      return "عذراً، لقد تم استهلاك الحصة المجانية للذكاء الاصطناعي لهذا اليوم. يرجى المحاولة مرة أخرى غداً.";
     }
     
-    return "حدث خطأ في الاتصال بالمعلم الذكي. يرجى التأكد من اتصالك بالإنترنت.";
+    return "حدث خطأ أثناء الاتصال بالمعلم الذكي. يرجى التأكد من استقرار الإنترنت لديك.";
   }
 };
