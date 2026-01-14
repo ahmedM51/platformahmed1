@@ -39,18 +39,29 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initApp = async () => {
-      const savedUser = await db.getUser();
-      if (savedUser) {
-        setUser(savedUser);
-        const [subs, tasks, notes, stats] = await Promise.all([
-          db.getSubjects(),
-          db.getTasks(),
-          db.getNotes(),
-          db.getStudyStats()
-        ]);
-        setCurrentXP(db.calculateTotalXP(subs, tasks, notes, stats));
+      // حماية: إذا استغرق التحميل أكثر من 5 ثوانٍ، افتح التطبيق بالبيانات المحلية
+      const timeout = setTimeout(() => {
+        if (isLoading) setIsLoading(false);
+      }, 5000);
+
+      try {
+        const savedUser = await db.getUser();
+        if (savedUser) {
+          setUser(savedUser);
+          const [subs, tasks, notes, stats] = await Promise.all([
+            db.getSubjects(),
+            db.getTasks(),
+            db.getNotes(),
+            db.getStudyStats()
+          ]);
+          setCurrentXP(db.calculateTotalXP(subs, tasks, notes, stats));
+        }
+      } catch (e) {
+        console.error("Initialization Error:", e);
+      } finally {
+        clearTimeout(timeout);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     initApp();
   }, []);
@@ -58,13 +69,15 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user && !isLoading) {
       const refreshXP = async () => {
-        const [subs, tasks, notes, stats] = await Promise.all([
-          db.getSubjects(),
-          db.getTasks(),
-          db.getNotes(),
-          db.getStudyStats()
-        ]);
-        setCurrentXP(db.calculateTotalXP(subs, tasks, notes, stats));
+        try {
+          const [subs, tasks, notes, stats] = await Promise.all([
+            db.getSubjects(),
+            db.getTasks(),
+            db.getNotes(),
+            db.getStudyStats()
+          ]);
+          setCurrentXP(db.calculateTotalXP(subs, tasks, notes, stats));
+        } catch (e) {}
       };
       refreshXP();
     }
