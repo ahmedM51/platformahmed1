@@ -2,26 +2,32 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const getAIResponse = async (prompt: string, context: string = "عام"): Promise<string> => {
+  // استخدام المفتاح الجديد المحقون
   const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
-    console.error("Gemini API Key is missing.");
-    return "عذراً، يجب ضبط مفتاح API_KEY في إعدادات Vercel لتفعيل الذكاء الاصطناعي.";
+    return "عذراً، مفتاح الـ AI غير مكوّن بشكل صحيح.";
   }
 
   try {
     const ai = new GoogleGenAI({ apiKey });
+    
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: "أنت مساعد ذكي لمنصة الطالب الذكي. السياق الحالي: " + context,
-        temperature: 0.7,
+        systemInstruction: `أنت "المعلم الذكي" في منصة الطالب الذكي. مهمتك مساعدة الطلاب في فهم المناهج الدراسية، تبسيط المعلومات، وتنظيم الوقت. السياق الحالي: ${context}. يرجى الإجابة بأسلوب تعليمي، مشجع، وباللغة العربية الفصحى البسيطة.`,
+        temperature: 0.8,
+        topP: 0.95,
       },
     });
-    return response.text || "لم أستطع الحصول على رد من المعلم الذكي.";
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. تأكد من صحة مفتاح الـ API.";
+
+    return response.text || "عذراً، لم أستطع معالجة هذا الطلب حالياً.";
+  } catch (error: any) {
+    console.error("Gemini AI Error:", error);
+    if (error.message?.includes("Quota exceeded") || error.message?.includes("429")) {
+      return "عذراً، تم الوصول للحد الأقصى لطلبات الذكاء الاصطناعي حالياً. يرجى المحاولة بعد قليل.";
+    }
+    return "حدث خطأ تقني في الاتصال بالذكاء الاصطناعي. يرجى المحاولة مرة أخرى لاحقاً.";
   }
 };
