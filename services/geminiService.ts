@@ -2,11 +2,11 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const getAIResponse = async (prompt: string, context: string = "عام"): Promise<string> => {
-  // استخدام المفتاح الجديد المحقون
-  const apiKey = process.env.API_KEY;
+  // استخدام المفتاح الجديد المحقون برمجياً
+  const apiKey = window.process?.env?.API_KEY || 'AIzaSyBNkAIB1P5lFmfrBKTCf9oPtSxcWvJCBpw';
   
-  if (!apiKey) {
-    return "عذراً، مفتاح الـ AI غير مكوّن بشكل صحيح.";
+  if (!apiKey || apiKey === 'undefined') {
+    return "عذراً، مفتاح الـ AI غير مكوّن بشكل صحيح في النظام.";
   }
 
   try {
@@ -26,7 +26,7 @@ export const getAIResponse = async (prompt: string, context: string = "عام"):
   } catch (error: any) {
     console.error("Gemini AI Error:", error);
     if (error.message?.includes("Quota exceeded") || error.message?.includes("429")) {
-      return "عذراً، تم الوصول للحد الأقصى لطلبات الذكاء الاصطناعي حالياً. يرجى المحاولة بعد قليل.";
+      return "عذراً، تم الوصول للحد الأقصى لطلبات الذكاء الاصطناعي المجانية حالياً. يرجى المحاولة بعد قليل.";
     }
     return "حدث خطأ تقني في الاتصال بالذكاء الاصطناعي. يرجى المحاولة مرة أخرى لاحقاً.";
   }
