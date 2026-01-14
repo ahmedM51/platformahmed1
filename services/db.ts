@@ -2,11 +2,11 @@
 import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+// الحصول على المفاتيح من الـ Shim أو البيئة
+const supabaseUrl = window.process?.env?.SUPABASE_URL || 'https://cmaxutqmblvvghftouqx.supabase.co';
+const supabaseKey = window.process?.env?.SUPABASE_ANON_KEY || '';
 
-// محاولة إنشاء العميل، مع حماية ضد الروابط غير الصحيحة
-export const supabase: SupabaseClient | null = (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) 
+export const supabase: SupabaseClient | null = (supabaseUrl && supabaseKey) 
   ? createClient(supabaseUrl, supabaseKey) 
   : null;
 
@@ -23,20 +23,18 @@ const KEYS = {
 const local = {
   get: (key: string) => {
     try {
-      if (typeof window === 'undefined') return null;
       const val = localStorage.getItem(key);
       return val ? JSON.parse(val) : null;
     } catch (e) { return null; }
   },
   set: (key: string, val: any) => {
     try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(key, JSON.stringify(val));
-      }
+      localStorage.setItem(key, JSON.stringify(val));
     } catch (e) {}
   }
 };
 
+// محرك البيانات الذكي: يحاول استخدام السحابة، وإذا فشل يستخدم المحلي بصمت
 export const db = {
   saveUser: async (user: User) => {
     local.set(KEYS.USER, user);
@@ -81,26 +79,35 @@ export const db = {
     return localData;
   },
   
-  saveSubject: async (sub: Partial<Subject>) => {
+  // Fix: Explicitly return Subject[] and ensure newSub has required fields to avoid type errors in Subjects.tsx
+  saveSubject: async (sub: Partial<Subject>): Promise<Subject[]> => {
     const current = await db.getSubjects();
-    const newSub = { ...sub, id: Date.now(), progress: 0, lectures: [], user_id: MOCK_USER_ID };
-    local.set(KEYS.SUBJECTS, [...current, newSub]);
+    const newSub: Subject = {
+      id: Date.now(),
+      name: sub.name || 'مادة بدون عنوان',
+      color: sub.color || 'bg-indigo-500',
+      progress: 0,
+      lectures: [],
+      ...sub
+    };
+    const updatedList = [...current, newSub];
+    local.set(KEYS.SUBJECTS, updatedList);
     try {
       if (supabase) {
         await supabase.from('subjects').insert({
           user_id: MOCK_USER_ID,
-          name: sub.name,
-          color: sub.color,
+          name: newSub.name,
+          color: newSub.color,
           progress: 0,
           lectures: []
         });
       }
     } catch (e) {}
-    return await db.getSubjects();
+    return updatedList;
   },
 
   deleteSubject: async (id: number) => {
-    const current = local.get(KEYS.SUBJECTS) || [];
+    const current = await db.getSubjects();
     const updated = current.filter((s: any) => s.id !== id);
     local.set(KEYS.SUBJECTS, updated);
     try { if (supabase) await supabase.from('subjects').delete().eq('id', id); } catch (e) {}
@@ -201,7 +208,8 @@ export const db = {
   saveTask: async (task: any) => {
     const current = await db.getTasks();
     const newTask = { ...task, id: Date.now(), status: 'upcoming' };
-    local.set(KEYS.TASKS, [newTask, ...current]);
+    const updated = [newTask, ...current];
+    local.set(KEYS.TASKS, updated);
     try {
       if (supabase) {
         await supabase.from('tasks').insert({
@@ -216,7 +224,7 @@ export const db = {
         });
       }
     } catch (e) {}
-    return [newTask, ...current];
+    return updated;
   },
 
   saveBatchTasks: async (newTasks: any[]) => {
@@ -236,7 +244,7 @@ export const db = {
           time: t.time,
           duration: t.duration,
           day_index: t.dayIndex,
-          subject_color: t.subjectColor || 'bg-indigo-500',
+          subject_color: t.subject_color || 'bg-indigo-500',
           status: 'upcoming',
           created_at: new Date().toISOString()
         }));
@@ -290,7 +298,8 @@ export const db = {
   saveNote: async (note: any) => {
     const current = await db.getNotes();
     const newNote = { ...note, id: Date.now(), date: new Date().toLocaleDateString('ar-EG') };
-    local.set(KEYS.NOTES, [newNote, ...current]);
+    const updated = [newNote, ...current];
+    local.set(KEYS.NOTES, updated);
     try {
       if (supabase) {
         await supabase.from('notes').insert({
@@ -303,7 +312,7 @@ export const db = {
         });
       }
     } catch (e) {}
-    return [newNote, ...current];
+    return updated;
   },
 
   deleteNote: async (id: number) => {
