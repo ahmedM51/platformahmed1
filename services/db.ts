@@ -5,6 +5,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
+// محاولة إنشاء العميل، مع حماية ضد الروابط غير الصحيحة
 export const supabase: SupabaseClient | null = (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) 
   ? createClient(supabaseUrl, supabaseKey) 
   : null;
@@ -125,7 +126,6 @@ export const db = {
     return updated;
   },
 
-  // Fix: Added editLecture method to resolve the error in components/Subjects.tsx
   editLecture: async (subjectId: number, lectureId: number, lectureUpdate: any) => {
     const subjects = await db.getSubjects();
     const updated = subjects.map((s: any) => {
@@ -146,7 +146,6 @@ export const db = {
     return updated;
   },
 
-  // Fix: Added deleteLecture method to resolve the error in components/Subjects.tsx
   deleteLecture: async (subjectId: number, lectureId: number) => {
     const subjects = await db.getSubjects();
     const updated = subjects.map((s: any) => {
@@ -165,7 +164,6 @@ export const db = {
     return updated;
   },
 
-  // Fix: Added toggleLectureStatus method to resolve the error in components/Subjects.tsx
   toggleLectureStatus: async (subjectId: number, lectureId: number) => {
     const subjects = await db.getSubjects();
     const updated = subjects.map((s: any) => {
@@ -221,7 +219,6 @@ export const db = {
     return [newTask, ...current];
   },
 
-  // Fix: Added saveBatchTasks method to resolve the error in components/Planner.tsx
   saveBatchTasks: async (newTasks: any[]) => {
     const current = await db.getTasks();
     const processed = newTasks.map(t => ({ 
@@ -249,7 +246,6 @@ export const db = {
     return updated;
   },
 
-  // Fix: Added toggleTask method to resolve the error in components/Planner.tsx
   toggleTask: async (id: number) => {
     const current = await db.getTasks();
     const updated = current.map((t: any) => 
@@ -265,7 +261,6 @@ export const db = {
     return updated;
   },
 
-  // Fix: Added deleteTask method to resolve the error in components/Planner.tsx
   deleteTask: async (id: number) => {
     const current = await db.getTasks();
     const updated = current.filter((t: any) => t.id !== id);
