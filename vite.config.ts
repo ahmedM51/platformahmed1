@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   define: {
     // تم تحديث المفتاح بناءً على طلبك
-    'process.env.API_KEY': JSON.stringify('AIzaSyDi96E5yOaHzeuWIkycH7rQ7zIsV_nEsuc'),
+    'process.env.GEMINI_API_KEY': JSON.stringify('AIzaSyDi96E5yOaHzeuWIkycH7rQ7zIsV_nEsuc'),
     'process.env.SUPABASE_URL': JSON.stringify('https://cmaxutqmblvvghftouqx.supabase.co'),
     'process.env.SUPABASE_ANON_KEY': JSON.stringify('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4bWh3d292eHJuZWZpcnl5d3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MzgzNjQsImV4cCI6MjA3MjAxNDM2NH0.FqzkWel93icaJ781ZCPhvzfVJu4iwqCa3hxV3AKuRlA'),
     'global': 'window',
