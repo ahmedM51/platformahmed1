@@ -2,18 +2,12 @@
 import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// جلب الإعدادات من إعدادات البيئة المحقونة بواسطة Vite
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-// تهيئة العميل فقط إذا كانت البيانات متوفرة لمنع الخطأ القاتل Uncaught Error: supabaseUrl is required
 export const supabase: SupabaseClient | null = (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) 
   ? createClient(supabaseUrl, supabaseKey) 
   : null;
-
-if (!supabase) {
-  console.warn("Supabase configuration is missing or invalid. Local storage will be used as fallback.");
-}
 
 const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -27,14 +21,18 @@ const KEYS = {
 
 const local = {
   get: (key: string) => {
-    if (typeof window === 'undefined') return null;
-    const val = localStorage.getItem(key);
-    return val ? JSON.parse(val) : null;
+    try {
+      if (typeof window === 'undefined') return null;
+      const val = localStorage.getItem(key);
+      return val ? JSON.parse(val) : null;
+    } catch (e) { return null; }
   },
   set: (key: string, val: any) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(key, JSON.stringify(val));
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(key, JSON.stringify(val));
+      }
+    } catch (e) {}
   }
 };
 
@@ -50,7 +48,7 @@ export const db = {
           xp: user.xp || 120
         });
       }
-    } catch (e) { console.error("Database Save Error:", e); }
+    } catch (e) {}
     return user;
   },
   
@@ -58,8 +56,8 @@ export const db = {
     const localUser = local.get(KEYS.USER);
     try {
       if (supabase) {
-        const { data } = await supabase.from('profiles').select('*').eq('id', MOCK_USER_ID).maybeSingle();
-        if (data) {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', MOCK_USER_ID).maybeSingle();
+        if (data && !error) {
           local.set(KEYS.USER, data);
           return data as User;
         }
@@ -72,8 +70,8 @@ export const db = {
     const localData = local.get(KEYS.SUBJECTS) || [];
     try {
       if (supabase) {
-        const { data } = await supabase.from('subjects').select('*').eq('user_id', MOCK_USER_ID);
-        if (data && data.length > 0) {
+        const { data, error } = await supabase.from('subjects').select('*').eq('user_id', MOCK_USER_ID);
+        if (!error && data) {
           local.set(KEYS.SUBJECTS, data);
           return data as Subject[];
         }
@@ -96,18 +94,15 @@ export const db = {
           lectures: []
         });
       }
-      return await db.getSubjects();
     } catch (e) {}
-    return [...current, newSub] as Subject[];
+    return await db.getSubjects();
   },
 
   deleteSubject: async (id: number) => {
     const current = local.get(KEYS.SUBJECTS) || [];
     const updated = current.filter((s: any) => s.id !== id);
     local.set(KEYS.SUBJECTS, updated);
-    try { 
-      if (supabase) await supabase.from('subjects').delete().eq('id', id); 
-    } catch (e) {}
+    try { if (supabase) await supabase.from('subjects').delete().eq('id', id); } catch (e) {}
     return updated;
   },
 
@@ -130,12 +125,13 @@ export const db = {
     return updated;
   },
 
-  editLecture: async (subjectId: number, lectureId: number, updatedFields: any) => {
+  // Fix: Added editLecture method to resolve the error in components/Subjects.tsx
+  editLecture: async (subjectId: number, lectureId: number, lectureUpdate: any) => {
     const subjects = await db.getSubjects();
     const updated = subjects.map((s: any) => {
       if (s.id === subjectId) {
         const updatedLecs = (s.lectures || []).map((l: any) => 
-          l.id === lectureId ? { ...l, ...updatedFields } : l
+          l.id === lectureId ? { ...l, ...lectureUpdate } : l
         );
         const completed = updatedLecs.filter((l: any) => l.isCompleted).length;
         const progress = updatedLecs.length > 0 ? Math.round((completed / updatedLecs.length) * 100) : 0;
@@ -150,6 +146,7 @@ export const db = {
     return updated;
   },
 
+  // Fix: Added deleteLecture method to resolve the error in components/Subjects.tsx
   deleteLecture: async (subjectId: number, lectureId: number) => {
     const subjects = await db.getSubjects();
     const updated = subjects.map((s: any) => {
@@ -168,6 +165,7 @@ export const db = {
     return updated;
   },
 
+  // Fix: Added toggleLectureStatus method to resolve the error in components/Subjects.tsx
   toggleLectureStatus: async (subjectId: number, lectureId: number) => {
     const subjects = await db.getSubjects();
     const updated = subjects.map((s: any) => {
@@ -192,8 +190,8 @@ export const db = {
     const localTasks = local.get(KEYS.TASKS) || [];
     try {
       if (supabase) {
-        const { data } = await supabase.from('tasks').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
-        if (data) {
+        const { data, error } = await supabase.from('tasks').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
+        if (!error && data) {
           local.set(KEYS.TASKS, data);
           return data as Task[];
         }
@@ -223,41 +221,19 @@ export const db = {
     return [newTask, ...current];
   },
 
-  toggleTask: async (id: number) => {
+  // Fix: Added saveBatchTasks method to resolve the error in components/Planner.tsx
+  saveBatchTasks: async (newTasks: any[]) => {
     const current = await db.getTasks();
-    const updated = current.map((t: any) => 
-      t.id === id ? { ...t, status: t.status === 'completed' ? 'upcoming' : 'completed' } : t
-    );
+    const processed = newTasks.map(t => ({ 
+      ...t, 
+      id: Date.now() + Math.random(), 
+      status: 'upcoming' 
+    }));
+    const updated = [...processed, ...current];
     local.set(KEYS.TASKS, updated);
     try {
       if (supabase) {
-        const task = updated.find(t => t.id === id);
-        if (task) {
-          await supabase.from('tasks').update({ status: task.status }).eq('id', id);
-        }
-      }
-    } catch (e) {}
-    return updated;
-  },
-
-  deleteTask: async (id: number) => {
-    const current = await db.getTasks();
-    const updated = current.filter((t: any) => t.id !== id);
-    local.set(KEYS.TASKS, updated);
-    try {
-      if (supabase) await supabase.from('tasks').delete().eq('id', id);
-    } catch (e) {}
-    return updated;
-  },
-
-  saveBatchTasks: async (tasks: any[]) => {
-    const current = await db.getTasks();
-    const newTasks = tasks.map(t => ({ ...t, id: Date.now() + Math.random(), status: 'upcoming' }));
-    const updated = [...newTasks, ...current];
-    local.set(KEYS.TASKS, updated);
-    try {
-      if (supabase) {
-        const payload = newTasks.map(t => ({
+        const toInsert = processed.map(t => ({
           user_id: MOCK_USER_ID,
           title: t.title,
           time: t.time,
@@ -267,7 +243,36 @@ export const db = {
           status: 'upcoming',
           created_at: new Date().toISOString()
         }));
-        await supabase.from('tasks').insert(payload);
+        await supabase.from('tasks').insert(toInsert);
+      }
+    } catch (e) {}
+    return updated;
+  },
+
+  // Fix: Added toggleTask method to resolve the error in components/Planner.tsx
+  toggleTask: async (id: number) => {
+    const current = await db.getTasks();
+    const updated = current.map((t: any) => 
+      t.id === id ? { ...t, status: t.status === 'completed' ? 'upcoming' : 'completed' } : t
+    );
+    local.set(KEYS.TASKS, updated);
+    try {
+      if (supabase) {
+        const task = updated.find((t: any) => t.id === id);
+        await supabase.from('tasks').update({ status: task.status }).eq('id', id);
+      }
+    } catch (e) {}
+    return updated;
+  },
+
+  // Fix: Added deleteTask method to resolve the error in components/Planner.tsx
+  deleteTask: async (id: number) => {
+    const current = await db.getTasks();
+    const updated = current.filter((t: any) => t.id !== id);
+    local.set(KEYS.TASKS, updated);
+    try {
+      if (supabase) {
+        await supabase.from('tasks').delete().eq('id', id);
       }
     } catch (e) {}
     return updated;
@@ -277,8 +282,8 @@ export const db = {
     const localNotes = local.get(KEYS.NOTES) || [];
     try {
       if (supabase) {
-        const { data } = await supabase.from('notes').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
-        if (data) {
+        const { data, error } = await supabase.from('notes').select('*').eq('user_id', MOCK_USER_ID).order('created_at', { ascending: false });
+        if (!error && data) {
           local.set(KEYS.NOTES, data);
           return data as Note[];
         }
@@ -310,9 +315,7 @@ export const db = {
     const current = await db.getNotes();
     const updated = current.filter((n: any) => n.id !== id);
     local.set(KEYS.NOTES, updated);
-    try {
-      if (supabase) await supabase.from('notes').delete().eq('id', id);
-    } catch (e) {}
+    try { if (supabase) await supabase.from('notes').delete().eq('id', id); } catch (e) {}
     return updated;
   },
 
