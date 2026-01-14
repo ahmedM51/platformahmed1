@@ -11,8 +11,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.all.min.js"></script>
     <script>
-      // Shim process for browser compatibility to prevent crashes
-      window.process = window.process || { env: {} };
+      // القضاء على مشكلة الصفحات البيضاء الناتجة عن أخطاء الـ process
+      window.process = { 
+        env: { 
+          API_KEY: 'AIzaSyC3wSrCQG00QvuFtPIXJnvzF8-UH5iXO0Y',
+          SUPABASE_URL: 'https://cmaxutqmblvvghftouqx.supabase.co',
+          SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4bWh3d292eHJuZWZpcnl5d3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MzgzNjQsImV4cCI6MjA3MjAxNDM2NH0.FqzkWel93icaJ781ZCPhvzfVJu4iwqCa3hxV3AKuRlA'
+        } 
+      };
       
       tailwind.config = {
         darkMode: 'class',
