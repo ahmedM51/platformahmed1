@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, Trash2, Tag, Plus, FileAudio, Sparkles, Loader2, 
   X, Upload, Square, CheckCircle2, Search, Volume2, Hash,
-  Wand2, FileText, Languages, MessageSquarePlus
+  Wand2, FileText, Languages, MessageSquarePlus, Globe
 } from 'lucide-react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { db } from '../services/db';
@@ -44,12 +44,13 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
   const [selectedCategory, setSelectedCategory] = useState('الكل');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [translatingId, setTranslatingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [processedResult, setProcessedResult] = useState<{title: string, text: string} | null>(null);
+  const [processedResult, setProcessedResult] = useState<{title: string, text: string, translation?: string} | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<any>(null);
@@ -103,10 +104,9 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
     setLoading(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const reader = new FileReader();
       
       const blobToBase64 = (blob: Blob): Promise<string> => {
-        return new Promise((resolve, _) => {
+        return new Promise((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
           reader.readAsDataURL(blob);
@@ -115,12 +115,13 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
 
       const base64Data = await blobToBase64(audioBlob);
       
+      // تحديث البرومبت ليشمل الترجمة الإنجليزية تلقائياً
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: { 
           parts: [
             { inlineData: { data: base64Data, mimeType: audioBlob.type || 'audio/webm' } }, 
-            { text: "قم بتفريغ هذا المقطع الصوتي بدقة. ثم لخصه في عنوان جذاب ونقاط واضحة باللغة العربية. أجب بتنسيق JSON حصراً: {\"title\": \"عنوان الملاحظة\", \"text\": \"التفريغ الكامل والتلخيص\"}" }
+            { text: "قم بتفريغ هذا المقطع الصوتي بدقة. ثم لخصه في عنوان جذاب ونقاط واضحة باللغة العربية. وأيضاً قم بترجمة الملخص إلى اللغة الإنجليزية. أجب بتنسيق JSON حصراً: {\"title\": \"عنوان الملاحظة\", \"text\": \"التفريغ والملخص بالعربي\", \"translation\": \"English Translation\"}" }
           ] 
         },
         config: { responseMimeType: "application/json" }
@@ -129,7 +130,8 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
       const result = JSON.parse(response.text || '{}');
       setProcessedResult({
         title: result.title || "ملاحظة ذكية جديدة",
-        text: result.text || "لم يتم استخراج نص واضح."
+        text: result.text || "لم يتم استخراج نص واضح.",
+        translation: result.translation
       });
     } catch (e) { 
       console.error(e);
@@ -139,12 +141,41 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
     }
   };
 
+  const handleManualTranslate = async (note: Note) => {
+    if (note.translation) return;
+    setTranslatingId(note.id);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `Translate the following Arabic educational note into clear, professional English:\n\n${note.text}\n\nReturn ONLY the translated text.`;
+      const res = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+      
+      const translation = res.text || "";
+      // تحديث الملاحظة في قاعدة البيانات
+      const allNotes = localGetNotes(); // Helper to update local state
+      const updatedNotes = notes.map(n => n.id === note.id ? { ...n, translation } : n);
+      setNotes(updatedNotes);
+      
+      // حفظ في الداتابيز الحقيقية (تحتاج ميثود تحديث في db.ts، سنستخدم saveNote كبديل للتحديث هنا)
+      await db.saveNote({ ...note, translation });
+    } catch (e) {
+      alert("فشلت الترجمة");
+    } finally {
+      setTranslatingId(null);
+    }
+  };
+
+  const localGetNotes = () => notes;
+
   const saveFinalNote = async (cat: string) => {
     if (!processedResult) return;
     try {
       const updated = await db.saveNote({
         title: processedResult.title,
         text: processedResult.text,
+        translation: processedResult.translation || '',
         category: cat,
         date: new Date().toLocaleDateString('ar-EG')
       });
@@ -233,6 +264,9 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                 <div className="flex justify-between items-start mb-6">
                   <span className="px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest">{note.category}</span>
                   <div className="flex gap-2">
+                    <button onClick={() => handleManualTranslate(note)} disabled={translatingId === note.id} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm ${note.translation ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white'}`} title="ترجمة للإنجليزية">
+                      {translatingId === note.id ? <Loader2 size={18} className="animate-spin" /> : <Globe size={20} />}
+                    </button>
                     <button onClick={() => speakNote(note.text)} className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex items-center justify-center hover:scale-110 transition-all shadow-sm" title="استماع">
                       <Volume2 size={20} />
                     </button>
@@ -245,9 +279,24 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                   <Sparkles size={24} className="text-amber-500 shrink-0" />
                   <span className="truncate">{note.title}</span>
                 </h4>
-                <div className="bg-slate-50/50 dark:bg-slate-800/50 p-6 rounded-3xl border dark:border-slate-700 shadow-inner flex-1 mb-6">
-                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-bold text-sm whitespace-pre-wrap">{note.text}</p>
+                
+                <div className="space-y-4 flex-1 mb-6">
+                  {/* النص العربي */}
+                  <div className="bg-slate-50/50 dark:bg-slate-800/50 p-6 rounded-3xl border dark:border-slate-700 shadow-inner">
+                    <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-bold text-sm whitespace-pre-wrap">{note.text}</p>
+                  </div>
+                  
+                  {/* النص الإنجليزي (المترجم) */}
+                  {note.translation && (
+                    <div className="bg-indigo-50/30 dark:bg-indigo-900/10 p-6 rounded-3xl border border-indigo-100/50 shadow-inner animate-in slide-in-from-top-2">
+                      <p className="text-xs font-black text-indigo-400 mb-2 uppercase tracking-widest flex items-center gap-2">
+                        <Globe size={12} /> English Translation
+                      </p>
+                      <p className="text-slate-600 dark:text-slate-400 leading-relaxed font-medium text-sm italic">{note.translation}</p>
+                    </div>
+                  )}
                 </div>
+
                 <div className="pt-4 border-t dark:border-slate-800 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   <span className="flex items-center gap-2"><CheckCircle2 size={12} className="text-emerald-500" /> تم الحفظ في {note.date}</span>
                 </div>
@@ -267,8 +316,8 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                 <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
                   <Mic size={32} />
                 </div>
-                <h3 className="text-3xl font-black mb-2 dark:text-white">المسجل الذكي المطور</h3>
-                <p className="text-slate-400 font-bold text-sm">سجل صوتك أو ارفع ملفاً، وسنقوم بتحويله لنص منظم</p>
+                <h3 className="text-3xl font-black mb-2 dark:text-white">المسجل الذكي مع الترجمة</h3>
+                <p className="text-slate-400 font-bold text-sm">سيتم تحويل صوتك لنص عربي وترجمته للإنجليزية تلقائياً</p>
               </div>
 
               {!processedResult ? (
@@ -316,15 +365,15 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                     className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-2xl flex items-center justify-center gap-4 hover:scale-[1.01] active:scale-95 disabled:opacity-50 transition-all"
                   >
                     {loading ? <Loader2 className="animate-spin" size={28} /> : <Wand2 size={28} />}
-                    {lang === 'ar' ? 'بدء التحويل الذكي' : 'Start AI Conversion'}
+                    {lang === 'ar' ? 'بدء التحويل والترجمة' : 'Convert & Translate'}
                   </button>
                 </div>
               ) : (
                 <div className="space-y-8 animate-in zoom-in">
                    <div className="bg-slate-50 dark:bg-slate-800 p-8 rounded-[3rem] border border-indigo-100 dark:border-slate-700">
                       <div className="flex items-center gap-3 mb-6 text-indigo-600">
-                        <Sparkles size={24} />
-                        <h4 className="font-black text-xl">تم استخراج المحتوى</h4>
+                        <Globe size={24} className="animate-pulse" />
+                        <h4 className="font-black text-xl">المحتوى المستخرج والمترجم</h4>
                       </div>
                       <div className="space-y-4">
                         <div className="p-4 bg-white dark:bg-slate-700 rounded-2xl border-r-4 border-indigo-500">
@@ -332,9 +381,15 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                           <p className="font-black text-lg dark:text-white">{processedResult.title}</p>
                         </div>
                         <div className="p-4 bg-white dark:bg-slate-700 rounded-2xl">
-                          <p className="text-xs font-black text-slate-400 mb-1 uppercase">المحتوى المستخرج</p>
+                          <p className="text-xs font-black text-slate-400 mb-1 uppercase">النص العربي</p>
                           <p className="font-bold text-sm leading-relaxed dark:text-slate-200">{processedResult.text}</p>
                         </div>
+                        {processedResult.translation && (
+                          <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100">
+                            <p className="text-xs font-black text-indigo-400 mb-1 uppercase tracking-widest">English Translation</p>
+                            <p className="font-medium text-sm leading-relaxed dark:text-slate-300 italic">{processedResult.translation}</p>
+                          </div>
+                        )}
                       </div>
                    </div>
 
