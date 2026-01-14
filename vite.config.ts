@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // المفتاح الجديد كمتغير بيئة داخلي
-    'process.env.API_KEY': JSON.stringify('AIzaSyBNkAIB1P5lFmfrBKTCf9oPtSxcWvJCBpw'),
+    // المفتاح الجديد الذي زودتنا به للعمل في بيئة الإنتاج
+    'process.env.API_KEY': JSON.stringify('AIzaSyBDReabbWtJPI31sPz6XHZ-vWT19vY7jCI'),
     'global': 'window',
   },
   build: {
