@@ -6,9 +6,15 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = window.process?.env?.SUPABASE_URL || 'https://cmaxutqmblvvghftouqx.supabase.co';
 const supabaseKey = window.process?.env?.SUPABASE_ANON_KEY || '';
 
-export const supabase: SupabaseClient | null = (supabaseUrl && supabaseKey) 
-  ? createClient(supabaseUrl, supabaseKey) 
-  : null;
+// محاولة إنشاء العميل، ولكن لن نسمح له بإيقاف التطبيق إذا فشل
+let supabase: SupabaseClient | null = null;
+try {
+  if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+} catch (e) {
+  console.warn("Supabase connection failed, using local storage instead.");
+}
 
 const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -34,7 +40,7 @@ const local = {
   }
 };
 
-// محرك البيانات الذكي: يحاول استخدام السحابة، وإذا فشل يستخدم المحلي بصمت
+// محرك البيانات الذكي: يعطي أولوية للاستقرار. إذا فشل Supabase (401)، يستخدم المحلي فوراً.
 export const db = {
   saveUser: async (user: User) => {
     local.set(KEYS.USER, user);
@@ -79,7 +85,6 @@ export const db = {
     return localData;
   },
   
-  // Fix: Explicitly return Subject[] and ensure newSub has required fields to avoid type errors in Subjects.tsx
   saveSubject: async (sub: Partial<Subject>): Promise<Subject[]> => {
     const current = await db.getSubjects();
     const newSub: Subject = {
@@ -244,7 +249,7 @@ export const db = {
           time: t.time,
           duration: t.duration,
           day_index: t.dayIndex,
-          subject_color: t.subject_color || 'bg-indigo-500',
+          subject_color: t.subjectColor || 'bg-indigo-500',
           status: 'upcoming',
           created_at: new Date().toISOString()
         }));
