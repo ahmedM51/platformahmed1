@@ -24,7 +24,7 @@ export interface Subject {
   progress: number;
   lectures: Lecture[];
   category?: string;
-  priority: 'low' | 'medium' | 'high';
+  priority?: 'low' | 'medium' | 'high';
 }
 
 export interface Task {
