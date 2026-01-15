@@ -11,13 +11,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.all.min.js"></script>
     <script>
-      // تأمين الكود ضد الأخطاء وضمان قراءة مفتاح API من البيئة
-      window.process = window.process || { env: {} };
-      window.process.env = {
-        ...window.process.env,
-        NODE_ENV: 'production'
-      };
-      
       tailwind.config = {
         darkMode: 'class',
         theme: {
