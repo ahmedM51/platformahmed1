@@ -258,7 +258,6 @@ export const MindMap: React.FC = () => {
 
   return (
     <div className="flex flex-col space-y-8 animate-in fade-in duration-500 font-cairo pb-32">
-      {/* Input Section */}
       <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-xl border border-slate-100 dark:border-slate-800 space-y-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
@@ -306,7 +305,6 @@ export const MindMap: React.FC = () => {
         </div>
       </div>
 
-      {/* Mind Map Canvas Area */}
       <div className="min-h-[600px] bg-white dark:bg-slate-900 rounded-[3.5rem] shadow-2xl border border-slate-100 dark:border-slate-800 relative flex flex-col overflow-hidden">
         {mapData ? (
           <div className="flex-1 overflow-auto p-20 flex items-start justify-center cursor-move no-scrollbar">
@@ -328,7 +326,6 @@ export const MindMap: React.FC = () => {
           </div>
         )}
 
-        {/* Toolbar Controls */}
         <div className="absolute bottom-8 left-8 flex flex-col gap-3 z-30">
           <div className="flex flex-col bg-white dark:bg-slate-800 p-2 rounded-3xl shadow-2xl border dark:border-slate-700">
             <button onClick={() => setZoom(z => Math.min(2.5, z + 0.15))} className="p-4 text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all" title="تكبير"><ZoomIn size={24} /></button>

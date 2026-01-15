@@ -6,7 +6,8 @@ import { CONFIG } from './config';
 // التحقق من صحة المفاتيح قبل محاولة الاتصال لمنع أخطاء 401 التي تعطل المتصفح
 const isSupabaseReady = CONFIG.SUPABASE_URL && CONFIG.SUPABASE_URL.startsWith('http') && CONFIG.SUPABASE_ANON_KEY;
 
-let supabase: SupabaseClient | null = null;
+// تصدير supabase لاستخدامه في السبورة الذكية
+export let supabase: SupabaseClient | null = null;
 if (isSupabaseReady) {
   try {
     supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
@@ -41,7 +42,6 @@ const local = {
   }
 };
 
-// نظام البيانات الهجين: يضمن عمل الموقع 100% حتى لو تعطلت السحابة
 export const db = {
   saveUser: async (user: User) => {
     local.set(KEYS.USER, user);

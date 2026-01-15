@@ -2,11 +2,10 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const getAIResponse = async (prompt: string, context: string = "عام"): Promise<string> => {
-  // استخدام API_KEY من البيئة حصراً لضمان عدم التسريب
   const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
-    return "نظام الذكاء الاصطناعي قيد التحديث. يرجى التأكد من ضبط مفتاح الـ API في إعدادات المنصة.";
+    return "نظام الذكاء الاصطناعي بانتظار مفتاح التشغيل. يرجى ضبط API_KEY في إعدادات البيئة.";
   }
 
   try {
@@ -16,24 +15,20 @@ export const getAIResponse = async (prompt: string, context: string = "عام"):
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: `أنت "المعلم الذكي" في منصة الطالب الذكي. مهمتك هي المساعدة التعليمية الاحترافية في سياق: ${context}. أجب باللغة العربية بأسلوب تعليمي مشجع ومبسط.`,
+        systemInstruction: `أنت "المعلم الذكي" في منصة الطالب الذكي المتخصصة لطلاب الثانوية والجامعة. 
+        مهمتك: تبسيط المعلومات المعقدة، شرح الدروس بأسلوب قصصي، وحل المسائل التعليمية. 
+        السياق الحالي: ${context}. 
+        القواعد:
+        - أجب باللغة العربية بأسلوب تعليمي مشجع.
+        - استخدم التنسيق الجميل (عناوين، نقاط، جداول).
+        - إذا كان السؤال عن مادة اللغة الإنجليزية، أجب بالإنجليزية تماماً.`,
         temperature: 0.7,
-        topP: 0.9,
       },
     });
 
-    return response.text || "لم أستطع معالجة هذا الطلب حالياً، جرب صياغة أخرى.";
+    return response.text || "عذراً، لم أتمكن من استخراج رد مناسب.";
   } catch (error: any) {
-    console.error("Gemini Error:", error);
-    
-    if (error.message?.includes("leaked")) {
-      return "تم إيقاف مفتاح الـ API الحالي لدواعي أمنية. يرجى تحديث المفتاح في إعدادات Vercel.";
-    }
-    
-    if (error.message?.includes("429") || error.message?.includes("Quota")) {
-      return "تم الوصول للحد الأقصى للطلبات المجانية. يرجى المحاولة بعد قليل.";
-    }
-    
-    return "عذراً، المعلم الذكي مشغول حالياً. يرجى المحاولة مرة أخرى.";
+    console.error("Gemini Critical Error:", error);
+    return "المعلم الذكي مشغول حالياً في تصحيح الاختبارات! يرجى المحاولة بعد قليل.";
   }
 };

@@ -8,8 +8,9 @@ import {
 import { GoogleGenAI, Modality } from "@google/genai";
 import { db } from '../services/db';
 import { Note } from '../types';
+import { translations } from '../i18n';
 
-// مساعدات فك التشفير الصوتي
+// Audio decoding helpers
 const decodeAudioData = async (data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> => {
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
@@ -39,9 +40,10 @@ const decodeBase64 = (base64: string) => {
 };
 
 export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
+  const t = translations[lang];
   const [notes, setNotes] = useState<Note[]>([]);
-  const [categories] = useState(['محاضرات', 'أفكار', 'مراجعة', 'أبحاث']);
-  const [selectedCategory, setSelectedCategory] = useState('الكل');
+  const categories = [t.notes_cat_lectures, t.notes_cat_ideas, t.notes_cat_review, t.notes_cat_research];
+  const [selectedCategory, setSelectedCategory] = useState(t.notes_all);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [translatingId, setTranslatingId] = useState<number | null>(null);
@@ -67,6 +69,11 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
     loadNotes();
   }, []);
 
+  // Sync selected category with language changes
+  useEffect(() => {
+    setSelectedCategory(t.notes_all);
+  }, [lang]);
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -86,7 +93,7 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
       setProcessedResult(null);
       timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000);
     } catch (err) { 
-      alert(lang === 'ar' ? "يرجى السماح بالوصول للميكروفون" : "Please allow mic access"); 
+      alert(t.notes_mic_allow); 
     }
   };
 
@@ -115,13 +122,15 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
 
       const base64Data = await blobToBase64(audioBlob);
       
-      // تحديث البرومبت ليشمل الترجمة الإنجليزية تلقائياً
+      // Prompt exactly as requested by user for Arabic summary + English translation
+      const prompt = `قم بتفريغ هذا المقطع الصوتي بدقة. ثم لخصه في عنوان جذاب ونقاط واضحة باللغة العربية. وأيضاً قم بترجمة الملخص إلى اللغة الإنجليزية. أجب بتنسيق JSON حصراً: {"title": "عنوان الملاحظة", "text": "التفريغ والملخص بالعربي", "translation": "English Translation"}`;
+
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: { 
           parts: [
             { inlineData: { data: base64Data, mimeType: audioBlob.type || 'audio/webm' } }, 
-            { text: "قم بتفريغ هذا المقطع الصوتي بدقة. ثم لخصه في عنوان جذاب ونقاط واضحة باللغة العربية. وأيضاً قم بترجمة الملخص إلى اللغة الإنجليزية. أجب بتنسيق JSON حصراً: {\"title\": \"عنوان الملاحظة\", \"text\": \"التفريغ والملخص بالعربي\", \"translation\": \"English Translation\"}" }
+            { text: prompt }
           ] 
         },
         config: { responseMimeType: "application/json" }
@@ -129,8 +138,8 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
 
       const result = JSON.parse(response.text || '{}');
       setProcessedResult({
-        title: result.title || "ملاحظة ذكية جديدة",
-        text: result.text || "لم يتم استخراج نص واضح.",
+        title: result.title || (lang === 'ar' ? "ملاحظة ذكية جديدة" : "New Smart Note"),
+        text: result.text || (lang === 'ar' ? "لم يتم استخراج نص واضح." : "No clear text extracted."),
         translation: result.translation
       });
     } catch (e) { 
@@ -153,21 +162,15 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
       });
       
       const translation = res.text || "";
-      // تحديث الملاحظة في قاعدة البيانات
-      const allNotes = localGetNotes(); // Helper to update local state
       const updatedNotes = notes.map(n => n.id === note.id ? { ...n, translation } : n);
       setNotes(updatedNotes);
-      
-      // حفظ في الداتابيز الحقيقية (تحتاج ميثود تحديث في db.ts، سنستخدم saveNote كبديل للتحديث هنا)
       await db.saveNote({ ...note, translation });
     } catch (e) {
-      alert("فشلت الترجمة");
+      alert(lang === 'ar' ? "فشلت الترجمة" : "Translation failed");
     } finally {
       setTranslatingId(null);
     }
   };
-
-  const localGetNotes = () => notes;
 
   const saveFinalNote = async (cat: string) => {
     if (!processedResult) return;
@@ -177,14 +180,14 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
         text: processedResult.text,
         translation: processedResult.translation || '',
         category: cat,
-        date: new Date().toLocaleDateString('ar-EG')
+        date: new Date().toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')
       });
       setNotes(updated);
       setIsModalOpen(false);
       setAudioBlob(null);
       setProcessedResult(null);
     } catch (e) {
-      alert("خطأ في حفظ الملاحظة");
+      alert(lang === 'ar' ? "خطأ في حفظ الملاحظة" : "Error saving note");
     }
   };
 
@@ -209,14 +212,14 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
   };
 
   const handleDeleteNote = async (id: number) => {
-    if (confirm(lang === 'ar' ? "هل تريد حذف هذه الملاحظة؟" : "Delete this note?")) {
+    if (confirm(t.notes_delete_confirm)) {
       const updated = await db.deleteNote(id);
       setNotes(updated);
     }
   };
 
   const filteredNotes = (notes || []).filter(n => 
-    (selectedCategory === 'الكل' || n.category === selectedCategory) && 
+    (selectedCategory === t.notes_all || n.category === selectedCategory) && 
     (n.title.toLowerCase().includes(searchQuery.toLowerCase()) || n.text.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -226,11 +229,11 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
         <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-xl border border-slate-100 dark:border-slate-800">
           <div className="relative mb-8">
             <Search className={`absolute ${lang === 'ar' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 text-slate-400`} size={18} />
-            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={lang === 'ar' ? 'بحث في ملاحظاتك...' : 'Search notes...'} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl py-4 pr-12 pl-4 text-xs font-bold border-none dark:text-white focus:ring-2 focus:ring-indigo-500" />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={t.notes_search} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl py-4 pr-12 pl-4 text-xs font-bold border-none dark:text-white focus:ring-2 focus:ring-indigo-500" />
           </div>
           <div className="space-y-2">
-            <button onClick={() => setSelectedCategory('الكل')} className={`w-full px-6 py-4 rounded-2xl font-black text-sm flex justify-between items-center transition-all ${selectedCategory === 'الكل' ? 'bg-indigo-600 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-              <span>كل الملاحظات</span>
+            <button onClick={() => setSelectedCategory(t.notes_all)} className={`w-full px-6 py-4 rounded-2xl font-black text-sm flex justify-between items-center transition-all ${selectedCategory === t.notes_all ? 'bg-indigo-600 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+              <span>{t.notes_all}</span>
               <Hash size={16} />
             </button>
             {categories.map(cat => (
@@ -245,7 +248,7 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
           <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md group-hover:rotate-12 transition-transform shadow-inner">
             <Plus size={32} />
           </div>
-          <span className="text-xl font-black">{lang === 'ar' ? 'تسجيل ملاحظة ذكية' : 'Record Smart Note'}</span>
+          <span className="text-xl font-black">{t.notes_record_btn}</span>
         </button>
       </aside>
 
@@ -255,7 +258,7 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
             <div className="w-24 h-24 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
               <FileAudio size={64} className="opacity-20" />
             </div>
-            <p className="text-2xl font-black opacity-30">ابدأ بتسجيل أول ملاحظة ذكية لك الآن!</p>
+            <p className="text-2xl font-black opacity-30">{t.notes_empty}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-20">
@@ -264,10 +267,10 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                 <div className="flex justify-between items-start mb-6">
                   <span className="px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest">{note.category}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => handleManualTranslate(note)} disabled={translatingId === note.id} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm ${note.translation ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white'}`} title="ترجمة للإنجليزية">
+                    <button onClick={() => handleManualTranslate(note)} disabled={translatingId === note.id} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm ${note.translation ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white'}`} title={lang === 'ar' ? "ترجمة للإنجليزية" : "Translate"}>
                       {translatingId === note.id ? <Loader2 size={18} className="animate-spin" /> : <Globe size={20} />}
                     </button>
-                    <button onClick={() => speakNote(note.text)} className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex items-center justify-center hover:scale-110 transition-all shadow-sm" title="استماع">
+                    <button onClick={() => speakNote(note.text)} className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex items-center justify-center hover:scale-110 transition-all shadow-sm" title={lang === 'ar' ? "استماع" : "Listen"}>
                       <Volume2 size={20} />
                     </button>
                     <button onClick={() => handleDeleteNote(note.id)} className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm">
@@ -281,12 +284,10 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                 </h4>
                 
                 <div className="space-y-4 flex-1 mb-6">
-                  {/* النص العربي */}
                   <div className="bg-slate-50/50 dark:bg-slate-800/50 p-6 rounded-3xl border dark:border-slate-700 shadow-inner">
                     <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-bold text-sm whitespace-pre-wrap">{note.text}</p>
                   </div>
                   
-                  {/* النص الإنجليزي (المترجم) */}
                   {note.translation && (
                     <div className="bg-indigo-50/30 dark:bg-indigo-900/10 p-6 rounded-3xl border border-indigo-100/50 shadow-inner animate-in slide-in-from-top-2">
                       <p className="text-xs font-black text-indigo-400 mb-2 uppercase tracking-widest flex items-center gap-2">
@@ -298,7 +299,7 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                 </div>
 
                 <div className="pt-4 border-t dark:border-slate-800 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <span className="flex items-center gap-2"><CheckCircle2 size={12} className="text-emerald-500" /> تم الحفظ في {note.date}</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 size={12} className="text-emerald-500" /> {lang === 'ar' ? `تم الحفظ في ${note.date}` : `Saved on ${note.date}`}</span>
                 </div>
               </div>
             ))}
@@ -306,18 +307,17 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
         )}
       </main>
 
-      {/* Modal تسجيل الملاحظة */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
            <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[3.5rem] p-10 shadow-2xl relative animate-in zoom-in overflow-y-auto max-h-[90vh] custom-scrollbar">
-              <button onClick={() => setIsModalOpen(false)} className="absolute top-8 left-8 text-slate-400 hover:text-rose-500 transition-all p-2"><X size={24} /></button>
+              <button onClick={() => setIsModalOpen(false)} className={`absolute top-8 ${lang === 'ar' ? 'left-8' : 'right-8'} text-slate-400 hover:text-rose-500 transition-all p-2`}><X size={24} /></button>
               
               <div className="text-center mb-8">
                 <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
                   <Mic size={32} />
                 </div>
-                <h3 className="text-3xl font-black mb-2 dark:text-white">المسجل الذكي مع الترجمة</h3>
-                <p className="text-slate-400 font-bold text-sm">سيتم تحويل صوتك لنص عربي وترجمته للإنجليزية تلقائياً</p>
+                <h3 className="text-3xl font-black mb-2 dark:text-white">{t.notes_recording}</h3>
+                <p className="text-slate-400 font-bold text-sm">{t.notes_recording_desc}</p>
               </div>
 
               {!processedResult ? (
@@ -352,7 +352,7 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                       <div className="bg-emerald-500/10 border border-emerald-500/20 px-8 py-4 rounded-2xl flex items-center gap-4 animate-in slide-in-from-bottom-2">
                         <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white"><FileAudio size={20} /></div>
                         <div>
-                          <p className="text-[11px] font-black text-emerald-700 uppercase tracking-widest">المقطع جاهز للتحليل</p>
+                          <p className="text-[11px] font-black text-emerald-700 uppercase tracking-widest">{lang === 'ar' ? 'المقطع جاهز للتحليل' : 'Audio ready for analysis'}</p>
                           <p className="text-[10px] font-bold text-slate-400">{(audioBlob.size / 1024 / 1024).toFixed(2)} MB</p>
                         </div>
                       </div>
@@ -365,7 +365,7 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                     className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-2xl flex items-center justify-center gap-4 hover:scale-[1.01] active:scale-95 disabled:opacity-50 transition-all"
                   >
                     {loading ? <Loader2 className="animate-spin" size={28} /> : <Wand2 size={28} />}
-                    {lang === 'ar' ? 'بدء التحويل والترجمة' : 'Convert & Translate'}
+                    {t.notes_save_btn}
                   </button>
                 </div>
               ) : (
@@ -373,15 +373,15 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                    <div className="bg-slate-50 dark:bg-slate-800 p-8 rounded-[3rem] border border-indigo-100 dark:border-slate-700">
                       <div className="flex items-center gap-3 mb-6 text-indigo-600">
                         <Globe size={24} className="animate-pulse" />
-                        <h4 className="font-black text-xl">المحتوى المستخرج والمترجم</h4>
+                        <h4 className="font-black text-xl">{lang === 'ar' ? 'المحتوى المستخرج والمترجم' : 'Extracted Content'}</h4>
                       </div>
                       <div className="space-y-4">
                         <div className="p-4 bg-white dark:bg-slate-700 rounded-2xl border-r-4 border-indigo-500">
-                          <p className="text-xs font-black text-slate-400 mb-1 uppercase">العنوان المقترح</p>
+                          <p className="text-xs font-black text-slate-400 mb-1 uppercase">{lang === 'ar' ? 'العنوان المقترح' : 'Suggested Title'}</p>
                           <p className="font-black text-lg dark:text-white">{processedResult.title}</p>
                         </div>
                         <div className="p-4 bg-white dark:bg-slate-700 rounded-2xl">
-                          <p className="text-xs font-black text-slate-400 mb-1 uppercase">النص العربي</p>
+                          <p className="text-xs font-black text-slate-400 mb-1 uppercase">{lang === 'ar' ? 'النص العربي والملخص' : 'Arabic Text & Summary'}</p>
                           <p className="font-bold text-sm leading-relaxed dark:text-slate-200">{processedResult.text}</p>
                         </div>
                         {processedResult.translation && (
@@ -394,7 +394,7 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                    </div>
 
                    <div className="space-y-4">
-                      <p className="text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">اختر تصنيفاً لحفظ الملاحظة</p>
+                      <p className="text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'ar' ? 'اختر تصنيفاً لحفظ الملاحظة' : 'Select Category'}</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {categories.map(cat => (
                           <button key={cat} onClick={() => saveFinalNote(cat)} className="py-4 bg-white dark:bg-slate-800 border-2 border-indigo-50 dark:border-slate-700 hover:border-indigo-600 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow-sm">
@@ -402,7 +402,7 @@ export const MyNotes: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
                           </button>
                         ))}
                       </div>
-                      <button onClick={() => setProcessedResult(null)} className="w-full py-4 text-slate-400 font-bold text-sm hover:text-rose-500 transition-colors">إعادة المحاولة / مسح</button>
+                      <button onClick={() => setProcessedResult(null)} className="w-full py-4 text-slate-400 font-bold text-sm hover:text-rose-500 transition-colors">{lang === 'ar' ? 'إعادة المحاولة / مسح' : 'Retry / Clear'}</button>
                    </div>
                 </div>
               )}

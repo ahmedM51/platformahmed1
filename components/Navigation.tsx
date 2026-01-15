@@ -21,7 +21,7 @@ export const Navigation: React.FC<NavProps> = ({ currentPage, setPage, lang, onL
   
   const menuGroups = [
     {
-      title: lang === 'ar' ? 'الرئيسية' : 'Home',
+      title: t.nav_group_home,
       items: [
         { id: 'dashboard', label: t.nav_dashboard, icon: Home },
         { id: 'subjects', label: t.nav_subjects, icon: BookOpen },
@@ -29,7 +29,7 @@ export const Navigation: React.FC<NavProps> = ({ currentPage, setPage, lang, onL
       ]
     },
     {
-      title: lang === 'ar' ? 'أدوات الذكاء الاصطناعي' : 'AI Tools',
+      title: t.nav_group_ai,
       items: [
         { id: 'ai-assistant', label: t.nav_ai_assistant, icon: GraduationCap },
         { id: 'creator', label: t.nav_creator, icon: LayoutDashboard },
@@ -38,7 +38,7 @@ export const Navigation: React.FC<NavProps> = ({ currentPage, setPage, lang, onL
       ]
     },
     {
-      title: lang === 'ar' ? 'أدوات الدراسة' : 'Study Tools',
+      title: t.nav_group_study,
       items: [
         { id: 'timer', label: t.nav_timer, icon: Clock },
         { id: 'mynotes', label: t.nav_mynotes, icon: FileAudio },
@@ -89,7 +89,7 @@ export const Navigation: React.FC<NavProps> = ({ currentPage, setPage, lang, onL
             } ${lang === 'ar' ? 'flex-row' : 'flex-row-reverse'}`}
           >
             <Crown size={18} />
-            <span className="font-bold text-sm">{lang === 'ar' ? 'خطط البرو' : 'Pro Plans'}</span>
+            <span className="font-bold text-sm">{t.nav_pro_plans}</span>
           </button>
         </div>
       </nav>

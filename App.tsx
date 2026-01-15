@@ -39,7 +39,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initApp = async () => {
-      // حماية: إذا استغرق التحميل أكثر من 5 ثوانٍ، افتح التطبيق بالبيانات المحلية
       const timeout = setTimeout(() => {
         if (isLoading) setIsLoading(false);
       }, 5000);
@@ -130,13 +129,13 @@ const App: React.FC = () => {
       case 'planner': return <Planner lang={lang} />;
       case 'timer': return <Timer lang={lang} />;
       case 'mindmap': return <MindMap />;
-      case 'creator': return <AICreator />;
+      case 'creator': return <AICreator lang={lang} />;
       case 'voice': return <VoiceAssistant lang={lang} />;
-      case 'blackboard': return <Blackboard />;
+      case 'blackboard': return <Blackboard lang={lang} />;
       case 'editor': return <ImageEditor />;
       case 'mynotes': return <MyNotes lang={lang} />;
-      case 'pricing': return <Pricing />;
-      case 'privacy': return <Privacy />;
+      case 'pricing': return <Pricing lang={lang} user={user} />;
+      case 'privacy': return <Privacy lang={lang} />;
       default: return <Dashboard user={user} lang={lang} setPage={setCurrentPage} />;
     }
   };
