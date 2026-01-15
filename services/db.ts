@@ -3,10 +3,8 @@ import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from './config';
 
-// التحقق من صحة المفاتيح قبل محاولة الاتصال لمنع أخطاء 401 التي تعطل المتصفح
 const isSupabaseReady = CONFIG.SUPABASE_URL && CONFIG.SUPABASE_URL.startsWith('http') && CONFIG.SUPABASE_ANON_KEY;
 
-// تصدير supabase لاستخدامه في السبورة الذكية
 export let supabase: SupabaseClient | null = null;
 if (isSupabaseReady) {
   try {
