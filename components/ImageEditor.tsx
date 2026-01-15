@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Image as ImageIcon, Wand2, Download, Upload, Trash2, Loader2, Sparkles, AlertCircle, Printer, FileDown } from 'lucide-react';
+import { Image as ImageIcon, Wand2, Download, Upload, Trash2, Loader2, Sparkles, AlertCircle, Printer } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 export const ImageEditor: React.FC = () => {
@@ -41,9 +41,10 @@ export const ImageEditor: React.FC = () => {
         },
       });
 
-      if (response.candidates && response.candidates[0].content.parts) {
+      const parts = response.candidates?.[0]?.content?.parts;
+      if (parts) {
         let found = false;
-        for (const part of response.candidates[0].content.parts) {
+        for (const part of parts) {
           if (part.inlineData) {
             setEditedImage(`data:image/png;base64,${part.inlineData.data}`);
             found = true;
@@ -76,7 +77,6 @@ export const ImageEditor: React.FC = () => {
           <style>
             body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: #fff; }
             img { max-width: 100%; max-height: 100%; object-contain: fit; }
-            @media print { body { background: white; } }
           </style>
         </head>
         <body>
@@ -95,7 +95,6 @@ export const ImageEditor: React.FC = () => {
           <h2 className="text-4xl font-black dark:text-white flex items-center gap-3">
             <ImageIcon className="text-indigo-600" /> محرر الصور الذكي
           </h2>
-          <p className="text-slate-500 mt-1 font-bold">تعديل الصور التعليمية وإضافة العناصر بذكاء</p>
         </div>
         <div className="flex gap-4">
           <label className="flex items-center gap-2 px-8 py-4 bg-white dark:bg-slate-800 border rounded-2xl font-black cursor-pointer hover:bg-slate-50 transition-all shadow-sm">
@@ -104,15 +103,9 @@ export const ImageEditor: React.FC = () => {
           </label>
           {(image || editedImage) && (
             <div className="flex gap-2">
-              <button onClick={downloadImage} className="px-6 py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg hover:scale-105 transition-all flex items-center gap-2">
-                <Download size={20} /> صورة (PNG)
-              </button>
-              <button onClick={exportToPDF} className="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:scale-105 transition-all flex items-center gap-2">
-                <Printer size={20} /> تصدير (PDF)
-              </button>
-              <button onClick={() => {setImage(null); setEditedImage(null);}} className="p-4 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all">
-                <Trash2 size={24} />
-              </button>
+              <button onClick={downloadImage} className="px-6 py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg">تحميل</button>
+              <button onClick={exportToPDF} className="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">PDF</button>
+              <button onClick={() => {setImage(null); setEditedImage(null);}} className="p-4 bg-rose-50 text-rose-500 rounded-2xl"><Trash2 /></button>
             </div>
           )}
         </div>
@@ -126,7 +119,7 @@ export const ImageEditor: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2">
           <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl border dark:border-slate-800 min-h-[500px] flex items-center justify-center relative overflow-hidden">
             {editedImage || image ? (
               <img src={editedImage || image!} className="max-w-full max-h-full object-contain p-10" alt="Workspace" />
@@ -147,22 +140,18 @@ export const ImageEditor: React.FC = () => {
 
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-xl border dark:border-slate-800">
-            <h3 className="text-xl font-black mb-6 flex items-center gap-3">
-              <Wand2 className="text-indigo-500" /> أوامر الذكاء الاصطناعي
-            </h3>
             <textarea 
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="مثال: اجعل الصورة تبدو كرسم يدوي، أضف أسهم توضيحية..."
-              className="w-full p-6 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl dark:text-white focus:ring-4 focus:ring-indigo-100 min-h-[150px] mb-6 font-bold"
+              placeholder="اكتب التعديل المطلوب..."
+              className="w-full p-6 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl dark:text-white min-h-[150px] mb-6 font-bold"
             />
             <button 
               onClick={handleEdit}
               disabled={loading || !image}
-              className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+              className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl disabled:opacity-50"
             >
-              {loading ? <Loader2 className="animate-spin" /> : <Sparkles />}
-              تعديل الصورة
+              تعديل بـ AI
             </button>
           </div>
         </div>

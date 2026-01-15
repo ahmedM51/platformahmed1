@@ -1,15 +1,13 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Sparkles, Presentation, FileText, Monitor, 
-  Layout, Save, Play, Download, Wand2, Loader2,
-  Upload, X, CheckCircle2, FileUp, ImageIcon,
+  Sparkles, Presentation, Download, Wand2, Loader2,
+  Upload, CheckCircle2, FileUp, ImageIcon,
   ArrowRight, ArrowLeft, Image as LucideImage,
-  Palette, Type, Maximize2, MonitorPlay, FileDown,
-  FileBox, Layers, AlertCircle, Printer
+  FileDown, X
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
-import PptxGenJS from 'https://esm.sh/pptxgenjs@3.12.0';
+import PptxGenJS from 'pptxgenjs';
 import { translations } from '../i18n';
 
 interface Slide {
@@ -80,7 +78,7 @@ export const AICreator: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => 
     setGenerationStep('text');
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const prompt = `أنت خبير في تصميم العروض التقديمية التعليمية. قم بإنشاء محتوى عرض تقديمي عن: "${topic || 'الملف المرفق'}". 
       عدد الشرائح المطلوبة: ${slideCount}. 
       اللغة: ${lang === 'ar' ? 'العربية' : 'الإنجليزية'}.
@@ -120,8 +118,11 @@ export const AICreator: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => 
           });
           
           let b64 = "";
-          for (const part of imgRes.candidates[0].content.parts) {
-            if (part.inlineData) b64 = `data:image/png;base64,${part.inlineData.data}`;
+          const parts = imgRes.candidates?.[0]?.content?.parts;
+          if (parts) {
+            for (const part of parts) {
+              if (part.inlineData) b64 = `data:image/png;base64,${part.inlineData.data}`;
+            }
           }
           finalSlides.push({ ...slide, imageUrl: b64 });
         } catch (e) {
@@ -174,13 +175,8 @@ export const AICreator: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => 
 
   const handleDownloadPDF = () => {
     if (!project) return;
-    
-    // إنشاء نافذة جديدة
     const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        alert(lang === 'ar' ? "يرجى السماح بالنوافذ المنبثقة (Pop-ups) لتتمكن من تصدير الـ PDF." : "Please allow pop-ups to export PDF.");
-        return;
-    }
+    if (!printWindow) return;
 
     const slidesHtml = project.slides.map((slide, i) => `
       <div class="slide-container" style="page-break-after: always; min-height: 100vh; padding: 40px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start; background: #ffffff;">
@@ -213,42 +209,18 @@ export const AICreator: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => 
           <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
           <style>
             body { margin: 0; padding: 0; background: #f8fafc; font-family: 'Cairo', sans-serif; }
-            .slide-container { background: white; }
             @media print {
               body { background: white; }
               .slide-container { margin: 0 !important; border: none !important; height: 100vh !important; page-break-after: always; }
               .no-print { display: none !important; }
             }
-            .no-print-bar { background: #4f46e5; color: white; padding: 15px; text-align: center; font-family: 'Cairo', sans-serif; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-            .btn { background: white; color: #4f46e5; border: none; padding: 10px 25px; border-radius: 12px; font-weight: 900; cursor: pointer; font-family: 'Cairo'; margin: 0 10px; }
           </style>
         </head>
         <body>
-          <div class="no-print no-print-bar">
-             <span>${lang === 'ar' ? 'يتم الآن تحضير ملف الـ PDF...' : 'Preparing PDF file...'}</span>
-             <button class="btn" onclick="window.print()">${lang === 'ar' ? 'إبدأ الطباعة يدوياً' : 'Start Print Manually'}</button>
+          <div class="no-print" style="background:#4f46e5; color:white; padding:15px; text-align:center;">
+             <button onclick="window.print()" style="background:white; color:#4f46e5; border:none; padding:10px 25px; border-radius:12px; font-weight:900;">إبدأ الطباعة</button>
           </div>
           ${slidesHtml}
-          <script>
-            // الانتظار حتى تحميل كل الصور لضمان جودة الـ PDF
-            window.onload = () => {
-              const images = document.getElementsByTagName('img');
-              const promises = Array.from(images).map(img => {
-                if (img.complete) return Promise.resolve();
-                return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
-              });
-              
-              Promise.all(promises).then(() => {
-                setTimeout(() => { 
-                   window.print();
-                   // لا نغلق النافذة فوراً لنسمح للمستخدم بمعاينة الملف إذا فشلت الطباعة التلقائية
-                   window.onafterprint = () => { 
-                      // اختيارياً: window.close(); 
-                   };
-                }, 800);
-              });
-            };
-          </script>
         </body>
       </html>
     `);
@@ -257,7 +229,6 @@ export const AICreator: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => 
 
   return (
     <div className={`flex flex-col space-y-10 animate-in fade-in duration-700 font-cairo pb-32 ${lang === 'ar' ? 'rtl' : 'ltr'}`}>
-      
       <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 space-y-8 relative overflow-hidden">
         <div className="text-center space-y-2">
           <div className="w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-white shadow-xl mx-auto mb-4">
@@ -299,7 +270,6 @@ export const AICreator: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => 
               <h3 className="text-xl font-black dark:text-white mb-2">
                 {generationStep === 'text' ? t.creator_processing_text : `${t.creator_processing_img} ${currentImgIndex}...`}
               </h3>
-              <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">يتم الآن بناء عرضك التقديمي بذكاء فائق</p>
            </div>
         </div>
       )}
@@ -341,7 +311,6 @@ export const AICreator: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => 
                              <LucideImage size={64} className="text-slate-700 animate-pulse" />
                           </div>
                         )}
-                        <div className={`absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-slate-900 via-transparent to-transparent ${lang === 'ar' ? 'md:bg-gradient-to-l' : ''}`}></div>
                       </div>
                    </div>
                 </div>
@@ -352,12 +321,6 @@ export const AICreator: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => 
               </div>
               <div className={`absolute inset-y-0 ${lang === 'ar' ? 'right-0' : 'left-0'} w-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity`}>
                 <button onClick={() => setActiveSlide(s => Math.max(0, s - 1))} className="w-10 h-10 bg-white/10 hover:bg-indigo-600 text-white rounded-full backdrop-blur-md transition-all active:scale-90"><ArrowRight size={20} /></button>
-              </div>
-
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5">
-                 {project.slides.map((_, i) => (
-                   <button key={i} onClick={() => setActiveSlide(i)} className={`h-1.5 rounded-full transition-all ${activeSlide === i ? 'w-6 bg-indigo-500' : 'w-1.5 bg-white/20 hover:bg-white/40'}`}></button>
-                 ))}
               </div>
            </div>
         </div>

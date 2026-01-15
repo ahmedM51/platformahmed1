@@ -6,7 +6,7 @@ import {
   RefreshCcw, Camera, FileDown, FileBox
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
-import PptxGenJS from 'https://esm.sh/pptxgenjs@3.12.0';
+import PptxGenJS from 'pptxgenjs';
 
 export const MindMap: React.FC = () => {
   const [topic, setTopic] = useState('');
@@ -82,7 +82,7 @@ export const MindMap: React.FC = () => {
     
     setLoading(true);
     setZoom(1); 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     
     try {
       let contents: any = [];
@@ -151,9 +151,8 @@ export const MindMap: React.FC = () => {
     if (!mapData) return;
     setLoading(true);
     try {
-      const pptx = new (PptxGenJS as any)();
+      const pptx = new PptxGenJS();
       pptx.layout = 'LAYOUT_16x9';
-      pptx.rtlMode = true;
 
       const slide = pptx.addSlide();
       slide.background = { color: 'FFFFFF' };

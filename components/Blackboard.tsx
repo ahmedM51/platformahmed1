@@ -2,368 +2,269 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Pen, Eraser, Type, Square, 
-    Highlighter, Move, Wand2, Image as ImageIcon,
+    Highlighter, Wand2, Image as ImageIcon,
     Undo2, Redo2, Download, Trash2, 
     ChevronRight, ChevronLeft, FilePlus,
-    Users, Link as LinkIcon, Settings, LogOut, Loader2,
+    Users, Link as LinkIcon, Settings, Loader2,
     Check, X as CloseIcon, Star, ArrowUpRight, MousePointer2,
-    Upload
+    Triangle, Circle, Minus, StickyNote, Grid3X3, AlignJustify, 
+    Maximize2, Camera, CheckCircle2, XCircle, Printer, Move
 } from 'lucide-react';
 import { supabase } from '../services/db';
+import { translations } from '../i18n';
 
 // --- Helpers ---
 const generateId = () => Math.random().toString(36).substr(2, 6).toUpperCase();
 
-const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number, type: string) => {
+const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number, type: string, theme: 'green' | 'black' | 'white') => {
     ctx.save();
-    ctx.fillStyle = '#ffffff';
+    // Base Colors
+    if (theme === 'green') ctx.fillStyle = '#064e3b';
+    else if (theme === 'black') ctx.fillStyle = '#0f172a';
+    else ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = '#e2e8f0'; 
+    
+    // Chalkboard texture effect (Natural look)
+    if (theme !== 'white') {
+        ctx.globalAlpha = 0.04;
+        for (let i = 0; i < 300; i++) {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+    }
+
+    ctx.strokeStyle = theme === 'white' ? '#e2e8f0' : 'rgba(255,255,255,0.08)'; 
     ctx.lineWidth = 1;
 
     if (type === 'lines') {
         const spacing = 40;
         ctx.beginPath();
-        for (let y = spacing; y < height; y += spacing) {
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
-        }
+        for (let y = spacing; y < height; y += spacing) { ctx.moveTo(0, y); ctx.lineTo(width, y); }
         ctx.stroke();
     } else if (type === 'grid') {
-        const spacing = 40;
+        const spacing = 50;
         ctx.beginPath();
-        for (let x = spacing; x < width; x += spacing) {
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
-        }
-        for (let y = spacing; y < height; y += spacing) {
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
-        }
+        for (let x = spacing; x < width; x += spacing) { ctx.moveTo(x, 0); ctx.lineTo(x, height); }
+        for (let y = spacing; y < height; y += spacing) { ctx.moveTo(0, y); ctx.lineTo(width, y); }
         ctx.stroke();
     } else if (type === 'dots') {
         const spacing = 40;
-        ctx.fillStyle = '#cbd5e1'; 
+        ctx.fillStyle = theme === 'white' ? '#cbd5e1' : 'rgba(255,255,255,0.15)';
         for (let x = spacing; x < width; x += spacing) {
             for (let y = spacing; y < height; y += spacing) {
-                ctx.beginPath();
-                ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI * 2); ctx.fill();
             }
         }
     }
     ctx.restore();
 };
 
-const drawShape = (ctx: CanvasRenderingContext2D, start: any, end: any, type: string, fill: boolean) => {
+const drawShape = (ctx: CanvasRenderingContext2D, start: any, end: any, type: string, fill: boolean, isChalk: boolean) => {
     const width = end.x - start.x;
     const height = end.y - start.y;
     const centerX = start.x + width / 2;
     const centerY = start.y + height / 2;
     
+    if (isChalk) {
+        ctx.setLineDash([2, 4]);
+        ctx.shadowBlur = 1;
+        ctx.shadowColor = ctx.strokeStyle as string;
+    }
+
     ctx.beginPath();
-    if (type === 'rectangle') {
-        ctx.rect(start.x, start.y, width, height);
-    } else if (type === 'circle') {
-        ctx.ellipse(centerX, centerY, Math.abs(width) / 2, Math.abs(height) / 2, 0, 0, 2 * Math.PI);
+    if (type === 'rectangle') ctx.rect(start.x, start.y, width, height);
+    else if (type === 'circle') ctx.ellipse(centerX, centerY, Math.abs(width) / 2, Math.abs(height) / 2, 0, 0, 2 * Math.PI);
+    else if (type === 'triangle') {
+        ctx.moveTo(centerX, start.y); ctx.lineTo(start.x, end.y); ctx.lineTo(end.x, end.y); ctx.closePath();
     } else if (type === 'arrow') {
         const angle = Math.atan2(end.y - start.y, end.x - start.x);
         const headLen = 15;
-        ctx.moveTo(start.x, start.y);
-        ctx.lineTo(end.x, end.y);
+        ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y);
         ctx.moveTo(end.x, end.y);
         ctx.lineTo(end.x - headLen * Math.cos(angle - Math.PI / 6), end.y - headLen * Math.sin(angle - Math.PI / 6));
         ctx.moveTo(end.x, end.y);
         ctx.lineTo(end.x - headLen * Math.cos(angle + Math.PI / 6), end.y - headLen * Math.sin(angle + Math.PI / 6));
+    } else if (type === 'line') {
+        ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y);
+    } else if (type === 'star') {
+        const spikes = 5; const outerR = Math.min(Math.abs(width), Math.abs(height)) / 2; const innerR = outerR / 2;
+        let rot = Math.PI / 2 * 3; let x = centerX; let y = centerY; const step = Math.PI / spikes;
+        ctx.moveTo(centerX, centerY - outerR);
+        for (let i = 0; i < spikes; i++) {
+            x = centerX + Math.cos(rot) * outerR; y = centerY + Math.sin(rot) * outerR; ctx.lineTo(x, y); rot += step;
+            x = centerX + Math.cos(rot) * innerR; y = centerY + Math.sin(rot) * innerR; ctx.lineTo(x, y); rot += step;
+        }
+        ctx.closePath();
+    } else if (type === 'check') {
+        const size = Math.min(Math.abs(width), Math.abs(height)); const pad = size * 0.2;
+        ctx.moveTo(start.x + pad, centerY); ctx.lineTo(centerX, end.y - pad); ctx.lineTo(end.x - pad, start.y + pad);
+    } else if (type === 'cross') {
+        const pad = Math.min(Math.abs(width), Math.abs(height)) * 0.2;
+        ctx.moveTo(start.x + pad, start.y + pad); ctx.lineTo(end.x - pad, end.y - pad);
+        ctx.moveTo(end.x - pad, start.y + pad); ctx.lineTo(start.x + pad, end.y - pad);
     }
-    if (fill && !['arrow'].includes(type)) {
-        ctx.fill();
-    }
+
+    if (fill && !['arrow', 'line', 'check', 'cross'].includes(type)) ctx.fill();
     ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
 };
 
-// --- Modal Component ---
-const SessionModal = ({ isOpen, onClose, onConnect, isConnecting, initialRoomId }: any) => {
-    const [roomId, setRoomId] = useState(initialRoomId || '');
-    const [copied, setCopied] = useState(false);
-
-    useEffect(() => { if (!roomId && isOpen) setRoomId(generateId()); }, [isOpen]);
-
-    if (!isOpen) return null;
-
-    const handleCopyLink = async () => {
-        const url = new URL(window.location.href);
-        url.searchParams.set('room', roomId);
-        await navigator.clipboard.writeText(roomId);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 border border-white/20 animate-in zoom-in" dir="rtl">
-                <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-2xl font-black dark:text-white">المشاركة الحية</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-                        <CloseIcon size={24} className="text-slate-400" />
-                    </button>
-                </div>
-                <div className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-slate-400 px-2">كود الغرفة</label>
-                        <input type="text" value={roomId} onChange={e => setRoomId(e.target.value.toUpperCase())} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 text-center font-mono text-xl tracking-widest dark:text-white focus:ring-2 focus:ring-indigo-500 uppercase" />
-                    </div>
-                    <div className="flex flex-col gap-3">
-                        <button onClick={() => onConnect(roomId)} disabled={isConnecting} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex justify-center items-center gap-3">
-                            {isConnecting ? <Loader2 className="animate-spin" /> : <Users size={20} />}
-                            دخول الغرفة
-                        </button>
-                        <button onClick={handleCopyLink} className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-3">
-                            <LinkIcon size={18} />
-                            {copied ? 'تم نسخ الكود' : 'نسخ كود الغرفة'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export const Blackboard: React.FC = () => {
+export const Blackboard: React.FC<{ lang?: 'ar' | 'en' }> = ({ lang = 'ar' }) => {
+    const t = translations[lang];
     const [currentTool, setCurrentTool] = useState('pen');
-    const [settings, setSettings] = useState({ color: '#4f46e5', thickness: 5, isFilled: false });
+    const [theme, setTheme] = useState<'green' | 'black' | 'white'>('green');
+    const [settings, setSettings] = useState({ color: '#ffffff', thickness: 4, isFilled: false });
     const [shapeType, setShapeType] = useState('rectangle');
-    const [backgroundType, setBackgroundType] = useState('plain');
-    const [history, setHistory] = useState<string[]>([]);
-    const [historyStep, setHistoryStep] = useState(-1);
-    const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
-    const [isConnected, setIsConnected] = useState(false);
-    const [roomId, setRoomId] = useState<string | null>(null);
-    const [remoteCursors, setRemoteCursors] = useState<any>({});
-    const [textInput, setTextInput] = useState<any>(null);
+    const [gridType, setGridType] = useState('plain');
+    const [pages, setPages] = useState<string[]>(['']);
+    const [currentPageIdx, setCurrentPageIdx] = useState(0);
+    
     const [isDrawing, setIsDrawing] = useState(false);
     const [startPoint, setStartPoint] = useState<any>(null);
     const [lastPoint, setLastPoint] = useState<any>(null);
+    const [stickyNotes, setStickyNotes] = useState<any[]>([]);
+    const [textInput, setTextInput] = useState<any>(null);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const tempCanvasRef = useRef<HTMLCanvasElement>(null);
-    const channelRef = useRef<any>(null);
-    const textAreaRef = useRef<HTMLTextAreaElement>(null);
+    const laserPoints = useRef<any[]>([]);
 
-    const COLORS = ['#000000', '#ef4444', '#22c55e', '#3b82f6', '#eab308', '#a855f7', '#4f46e5'];
+    const COLORS = theme === 'white' ? 
+        ['#000000', '#ef4444', '#22c55e', '#3b82f6', '#4f46e5', '#a855f7'] : 
+        ['#ffffff', '#fbbf24', '#f87171', '#60a5fa', '#34d399', '#f472b6'];
 
     const getCoords = (e: any) => {
         if (!containerRef.current) return { x: 0, y: 0, nx: 0, ny: 0 };
         const rect = containerRef.current.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
+        const x = clientX - rect.left; const y = clientY - rect.top;
         return { x, y, nx: x / rect.width, ny: y / rect.height };
     };
 
-    const broadcast = useCallback((payload: any) => {
-        if (isConnected && channelRef.current) {
-            channelRef.current.send({
-                type: 'broadcast',
-                event: 'drawing_event',
-                payload
-            });
-        }
-    }, [isConnected]);
-
-    // Setup Supabase Realtime
     useEffect(() => {
-        if (isConnected && roomId && supabase) {
-            const channel = supabase.channel(`room_${roomId}`, {
-                config: { broadcast: { self: false } }
-            });
-
-            channel
-                .on('broadcast', { event: 'drawing_event' }, ({ payload }) => {
-                    handleRemoteEvent(payload);
-                })
-                .subscribe();
-
-            channelRef.current = channel;
-            return () => { channel.unsubscribe(); };
-        }
-    }, [isConnected, roomId]);
-
-    const handleRemoteEvent = (data: any) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const w = canvas.width;
-        const h = canvas.height;
-
-        switch (data.type) {
-            case 'draw':
-                ctx.beginPath();
-                ctx.strokeStyle = data.color;
-                ctx.lineWidth = data.thickness;
-                ctx.globalAlpha = data.opacity || 1.0;
-                ctx.lineCap = 'round';
-                ctx.moveTo(data.x0 * w, data.y0 * h);
-                ctx.lineTo(data.x1 * w, data.y1 * h);
-                ctx.stroke();
-                ctx.globalAlpha = 1.0;
-                break;
-            case 'clear':
-                ctx.clearRect(0, 0, w, h);
-                drawBackground(ctx, w, h, backgroundType);
-                break;
-            case 'text':
-                ctx.font = `${data.fontSize}px Cairo`;
-                ctx.fillStyle = data.color;
-                ctx.fillText(data.text, data.x * w, data.y * h);
-                break;
-            case 'shape':
-                ctx.strokeStyle = data.color;
-                ctx.lineWidth = data.thickness;
-                ctx.fillStyle = data.color;
-                drawShape(ctx, { x: data.x0 * w, y: data.y0 * h }, { x: data.x1 * w, y: data.y1 * h }, data.shapeType, data.fill);
-                break;
-            case 'image':
-                const img = new Image();
-                img.onload = () => ctx.drawImage(img, data.x * w, data.y * h, data.w * w, data.h * h);
-                img.src = data.src;
-                break;
-            case 'cursor':
-                setRemoteCursors((prev: any) => ({ ...prev, [data.userId]: { x: data.x, y: data.y } }));
-                break;
-        }
-    };
-
-    const saveToHistory = (dataURL: string) => {
-        setHistory(prev => {
-            const next = prev.slice(0, historyStep + 1);
-            next.push(dataURL);
-            if (next.length > 20) next.shift();
-            return next;
-        });
-        setHistoryStep(prev => prev + 1);
-    };
+        const animate = () => {
+            const tempCtx = tempCanvasRef.current?.getContext('2d');
+            if (!tempCtx || !tempCanvasRef.current) return;
+            if (!isDrawing || currentTool !== 'shape') {
+                tempCtx.clearRect(0, 0, tempCanvasRef.current.width, tempCanvasRef.current.height);
+            }
+            const now = Date.now();
+            laserPoints.current = laserPoints.current.filter(p => now - p.time < 800);
+            if (laserPoints.current.length > 0) {
+                tempCtx.lineCap = 'round';
+                for (let i = 1; i < laserPoints.current.length; i++) {
+                    const p1 = laserPoints.current[i-1]; const p2 = laserPoints.current[i];
+                    if (Math.abs(p1.x - p2.x) > 100) continue;
+                    const opacity = 1 - ((now - p2.time) / 800);
+                    tempCtx.beginPath(); tempCtx.moveTo(p1.x, p1.y); tempCtx.lineTo(p2.x, p2.y);
+                    tempCtx.lineWidth = 4; tempCtx.strokeStyle = `rgba(239, 68, 68, ${opacity})`; tempCtx.stroke();
+                }
+            }
+            requestAnimationFrame(animate);
+        };
+        const animId = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(animId);
+    }, [isDrawing, currentTool]);
 
     const startDrawing = (e: any) => {
         const coords = getCoords(e);
         if (currentTool === 'text') {
-            if (textInput) finishText();
-            else setTextInput({ ...coords, value: '' });
+            if (textInput?.visible) finishText();
+            else setTextInput({ x: coords.x, y: coords.y, nx: coords.nx, ny: coords.ny, visible: true, value: '' });
             return;
         }
-        setIsDrawing(true);
-        setStartPoint(coords);
-        setLastPoint(coords);
+        setIsDrawing(true); setStartPoint(coords); setLastPoint(coords);
     };
 
     const draw = (e: any) => {
         const coords = getCoords(e);
-        if (isConnected) broadcast({ type: 'cursor', x: coords.nx, y: coords.ny, userId: 'User1' });
-
+        if (currentTool === 'laser') {
+            laserPoints.current.push({ x: coords.x, y: coords.y, time: Date.now() });
+            return;
+        }
         if (!isDrawing || !lastPoint) return;
-        const ctx = canvasRef.current?.getContext('2d');
-        if (!ctx) return;
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
 
         if (['pen', 'eraser', 'highlighter'].includes(currentTool)) {
             ctx.beginPath();
-            ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : settings.color;
-            ctx.lineWidth = currentTool === 'highlighter' ? settings.thickness * 4 : settings.thickness;
-            ctx.globalAlpha = currentTool === 'highlighter' ? 0.3 : 1.0;
+            ctx.strokeStyle = currentTool === 'eraser' ? (theme === 'white' ? '#ffffff' : (theme === 'green' ? '#064e3b' : '#0f172a')) : settings.color;
+            ctx.lineWidth = currentTool === 'highlighter' ? settings.thickness * 8 : settings.thickness;
+            ctx.globalAlpha = currentTool === 'highlighter' ? 0.35 : 1.0;
             ctx.lineCap = 'round';
-            ctx.moveTo(lastPoint.x, lastPoint.y);
-            ctx.lineTo(coords.x, coords.y);
-            ctx.stroke();
-
-            broadcast({
-                type: 'draw',
-                x0: lastPoint.nx, y0: lastPoint.ny,
-                x1: coords.nx, y1: coords.ny,
-                color: ctx.strokeStyle,
-                thickness: ctx.lineWidth,
-                opacity: ctx.globalAlpha
-            });
-            setLastPoint(coords);
-            ctx.globalAlpha = 1.0;
+            if (theme !== 'white' && currentTool === 'pen') {
+                ctx.shadowBlur = 1; ctx.shadowColor = settings.color; ctx.setLineDash([1, 2]);
+            }
+            ctx.moveTo(lastPoint.x, lastPoint.y); ctx.lineTo(coords.x, coords.y); ctx.stroke();
+            setLastPoint(coords); ctx.globalAlpha = 1.0; ctx.shadowBlur = 0; ctx.setLineDash([]);
         } else if (currentTool === 'shape') {
             const tempCtx = tempCanvasRef.current?.getContext('2d');
             if (tempCtx) {
                 tempCtx.clearRect(0, 0, tempCanvasRef.current!.width, tempCanvasRef.current!.height);
-                tempCtx.strokeStyle = settings.color;
-                tempCtx.lineWidth = settings.thickness;
-                tempCtx.fillStyle = settings.color;
-                drawShape(tempCtx, startPoint, coords, shapeType, settings.isFilled);
+                tempCtx.strokeStyle = settings.color; tempCtx.lineWidth = settings.thickness; tempCtx.fillStyle = settings.color;
+                drawShape(tempCtx, startPoint, coords, shapeType, settings.isFilled, theme !== 'white');
             }
         }
     };
 
-    const stopDrawing = (e: any) => {
+    const stopDrawing = () => {
         if (!isDrawing) return;
         setIsDrawing(false);
-        const coords = getCoords(e);
         const ctx = canvasRef.current?.getContext('2d');
         if (currentTool === 'shape' && ctx && tempCanvasRef.current) {
             ctx.drawImage(tempCanvasRef.current, 0, 0);
-            broadcast({
-                type: 'shape',
-                shapeType,
-                x0: startPoint.nx, y0: startPoint.ny,
-                x1: coords.nx, y1: coords.ny,
-                color: settings.color,
-                thickness: settings.thickness,
-                fill: settings.isFilled
-            });
             tempCanvasRef.current.getContext('2d')?.clearRect(0, 0, tempCanvasRef.current.width, tempCanvasRef.current.height);
         }
-        if (canvasRef.current) saveToHistory(canvasRef.current.toDataURL());
+        updatePageState();
+    };
+
+    const updatePageState = () => {
+        const newPages = [...pages]; 
+        newPages[currentPageIdx] = canvasRef.current?.toDataURL() || ''; 
+        setPages(newPages);
     };
 
     const finishText = () => {
-        if (textInput && textInput.value.trim()) {
-            const ctx = canvasRef.current?.getContext('2d');
-            if (ctx) {
-                const fontSize = settings.thickness * 4;
-                ctx.font = `${fontSize}px Cairo`;
-                ctx.fillStyle = settings.color;
-                ctx.fillText(textInput.value, textInput.x, textInput.y);
-                broadcast({
-                    type: 'text',
-                    text: textInput.value,
-                    x: textInput.nx,
-                    y: textInput.ny,
-                    color: settings.color,
-                    fontSize
-                });
-                saveToHistory(canvasRef.current!.toDataURL());
-            }
+        if (!textInput || !textInput.value) { setTextInput(null); return; }
+        const ctx = canvasRef.current?.getContext('2d');
+        if (ctx) {
+            ctx.save(); ctx.font = `bold ${settings.thickness * 5}px 'Cairo'`; ctx.fillStyle = settings.color; ctx.textBaseline = 'top';
+            textInput.value.split('\n').forEach((line: string, i: number) => {
+                ctx.fillText(line, textInput.x, textInput.y + (i * settings.thickness * 6));
+            });
+            ctx.restore();
+            updatePageState();
         }
         setTextInput(null);
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const src = event.target?.result as string;
-            const img = new Image();
-            img.onload = () => {
-                const ctx = canvasRef.current?.getContext('2d');
-                if (ctx) {
-                    const canvas = canvasRef.current!;
-                    const w = 0.3; // 30% width
-                    const h = (img.height / img.width) * w * (canvas.width / canvas.height);
-                    ctx.drawImage(img, 0.35 * canvas.width, 0.35 * canvas.height, w * canvas.width, h * canvas.height);
-                    broadcast({ type: 'image', src, x: 0.35, y: 0.35, w, h });
-                    saveToHistory(canvas.toDataURL());
-                }
-            };
-            img.src = src;
-        };
-        reader.readAsDataURL(file);
+    const handleClear = () => {
+        if (confirm(t.blackboard_clear_confirm)) {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
+                drawBackground(ctx, canvasRef.current!.width, canvasRef.current!.height, gridType, theme);
+                setStickyNotes([]);
+                updatePageState();
+            }
+        }
+    };
+
+    const exportPDF = () => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+        const slidesHtml = pages.map((p, i) => `
+            <div style="page-break-after: always; height: 100vh; display: flex; align-items: center; justify-content: center; background: #0f172a; padding: 20px;">
+                <img src="${p}" style="max-width: 100%; max-height: 100%; border: 15px solid #3e2723; border-radius: 10px; box-shadow: 0 20px 40px rgba(0,0,0,0.8);">
+            </div>
+        `).join('');
+        printWindow.document.write(`<html><body style="margin:0; background: #020617;">${slidesHtml}<script>window.onload=()=>window.print();</script></body></html>`);
+        printWindow.document.close();
     };
 
     const initCanvas = useCallback(() => {
@@ -372,101 +273,116 @@ export const Blackboard: React.FC = () => {
         canvasRef.current.width = tempCanvasRef.current.width = clientWidth;
         canvasRef.current.height = tempCanvasRef.current.height = clientHeight;
         const ctx = canvasRef.current.getContext('2d');
-        if (ctx) drawBackground(ctx, clientWidth, clientHeight, backgroundType);
-    }, [backgroundType]);
-
-    useEffect(() => {
-        initCanvas();
-        window.addEventListener('resize', initCanvas);
-        return () => window.removeEventListener('resize', initCanvas);
-    }, [initCanvas]);
-
-    const handleClear = () => {
-        if (confirm('هل تريد مسح السبورة؟')) {
-            const ctx = canvasRef.current?.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
-                drawBackground(ctx, canvasRef.current!.width, canvasRef.current!.height, backgroundType);
-                broadcast({ type: 'clear' });
-                saveToHistory(canvasRef.current!.toDataURL());
+        if (ctx) {
+            drawBackground(ctx, clientWidth, clientHeight, gridType, theme);
+            if (pages[currentPageIdx]) {
+                const img = new Image(); img.src = pages[currentPageIdx];
+                img.onload = () => ctx.drawImage(img, 0, 0);
             }
         }
-    };
+    }, [gridType, theme, currentPageIdx, pages]);
+
+    useEffect(() => { initCanvas(); window.addEventListener('resize', initCanvas); return () => window.removeEventListener('resize', initCanvas); }, [initCanvas]);
 
     return (
-        <div className="flex flex-col h-[calc(100vh-10rem)] bg-white dark:bg-slate-950 rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden relative font-cairo">
+        <div className={`flex flex-col h-[calc(100vh-10rem)] bg-slate-50 dark:bg-slate-950 rounded-[3.5rem] shadow-2xl border-[12px] border-[#3e2723] overflow-hidden relative font-cairo ${lang === 'ar' ? 'rtl' : 'ltr'}`}>
             
-            {/* Top Bar */}
-            <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-8 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-6 z-20">
-                <div className="flex items-center gap-4">
-                    <div className="flex gap-1 p-1 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                        {COLORS.map(c => (
-                            <button key={c} onClick={() => setSettings(s => ({ ...s, color: c }))} className={`w-6 h-6 rounded-lg transition-all ${settings.color === c ? 'scale-110 shadow-md ring-2 ring-indigo-500' : ''}`} style={{ backgroundColor: c }} />
-                        ))}
+            {/* Professional School Tray */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#211210] p-3 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex items-center gap-6 z-50 border-t-4 border-[#5d4037]">
+                <div className="flex gap-2.5 px-4 border-l border-white/10">
+                    {COLORS.map(c => (
+                        <button key={c} onClick={() => setSettings(s => ({ ...s, color: c }))} className={`w-10 h-10 rounded-full transition-all border-2 ${settings.color === c ? 'scale-125 border-white shadow-[0_0_15px_white]' : 'border-transparent opacity-60 hover:opacity-100'}`} style={{ backgroundColor: c }} />
+                    ))}
+                </div>
+                <div className="flex gap-2">
+                    {[
+                        { id: 'pen', icon: Pen, label: 'طباشير' },
+                        { id: 'eraser', icon: Eraser, label: 'ممسحة' },
+                        { id: 'text', icon: Type, label: 'نص' },
+                        { id: 'shape', icon: Square, label: 'أشكال' },
+                        { id: 'laser', icon: Wand2, label: 'ليزر' },
+                    ].map(t => (
+                        <button key={t.id} onClick={() => setCurrentTool(t.id)} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${currentTool === t.id ? 'bg-white text-[#3e2723] shadow-xl scale-110' : 'text-white/40 hover:text-white hover:bg-white/5'}`}>
+                            <t.icon size={26} />
+                        </button>
+                    ))}
+                    <button onClick={() => setStickyNotes([...stickyNotes, { id: Date.now(), x: 100, y: 100, text: '', color: '#fef3c7' }])} className="w-14 h-14 bg-amber-400 text-amber-950 rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-lg"><StickyNote size={26} /></button>
+                </div>
+            </div>
+
+            {/* School Header Panel */}
+            <div className="bg-[#2d1b18] px-10 py-5 flex flex-wrap items-center justify-between gap-6 z-20 shadow-2xl border-b border-[#3e2723]">
+                <div className="flex items-center gap-5">
+                    <div className="flex bg-black/40 p-1 rounded-2xl border border-white/10">
+                        <button onClick={() => setTheme('green')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${theme === 'green' ? 'bg-[#064e3b] text-white shadow-lg' : 'text-white/30'}`}>خضراء</button>
+                        <button onClick={() => setTheme('black')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${theme === 'black' ? 'bg-slate-900 text-white shadow-lg' : 'text-white/30'}`}>سوداء</button>
+                        <button onClick={() => setTheme('white')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${theme === 'white' ? 'bg-white text-indigo-800 shadow-lg' : 'text-white/30'}`}>بيضاء</button>
                     </div>
-                    <input type="range" min="1" max="40" value={settings.thickness} onChange={e => setSettings(s => ({ ...s, thickness: parseInt(e.target.value) }))} className="w-24 accent-indigo-600" />
+                    <div className="flex bg-black/40 p-1 rounded-2xl border border-white/10">
+                        <button onClick={() => setGridType('plain')} className={`p-2.5 rounded-xl ${gridType === 'plain' ? 'bg-white/20 text-white' : 'text-white/30'}`}><Maximize2 size={18} /></button>
+                        <button onClick={() => setGridType('lines')} className={`p-2.5 rounded-xl ${gridType === 'lines' ? 'bg-white/20 text-white' : 'text-white/30'}`}><AlignJustify size={18} /></button>
+                        <button onClick={() => setGridType('grid')} className={`p-2.5 rounded-xl ${gridType === 'grid' ? 'bg-white/20 text-white' : 'text-white/30'}`}><Grid3X3 size={18} /></button>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 bg-black/30 p-1.5 rounded-2xl border border-white/5">
+                    <button onClick={() => currentPageIdx > 0 && setCurrentPageIdx(currentPageIdx - 1)} disabled={currentPageIdx === 0} className="p-2.5 text-white/60 hover:text-white disabled:opacity-20"><ChevronRight size={22} /></button>
+                    <span className="text-sm font-black text-white px-4 min-w-[70px] text-center">{currentPageIdx + 1} / {pages.length}</span>
+                    <button onClick={() => currentPageIdx < pages.length - 1 && setCurrentPageIdx(currentPageIdx + 1)} disabled={currentPageIdx === pages.length - 1} className="p-2.5 text-white/60 hover:text-white disabled:opacity-20"><ChevronLeft size={22} /></button>
+                    <button onClick={() => { setPages([...pages, '']); setCurrentPageIdx(pages.length); }} className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-500 shadow-lg transition-all"><FilePlus size={20} /></button>
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <button onClick={() => setIsSessionModalOpen(true)} className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-xs font-black transition-all ${isConnected ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
-                        <Users size={16} /> {isConnected ? `غرفة: ${roomId}` : 'مشاركة حية'}
-                    </button>
-                    <button onClick={handleClear} className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all"><Trash2 size={20} /></button>
+                    <button onClick={exportPDF} className="px-8 py-3.5 bg-white text-[#3e2723] rounded-2xl font-black text-xs shadow-xl flex items-center gap-3 hover:bg-slate-100 transition-all"><Printer size={20} /> تصدير الدرس PDF</button>
+                    <button onClick={handleClear} className="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center hover:bg-rose-600 transition-all shadow-lg"><Trash2 size={24} /></button>
                 </div>
             </div>
 
-            {/* Main Area */}
-            <div className="flex-1 flex overflow-hidden">
-                <aside className="w-16 bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 flex flex-col items-center py-6 gap-4 shadow-xl z-20">
+            {/* Float Palette for shapes */}
+            {currentTool === 'shape' && (
+                <div className="absolute top-32 left-10 flex flex-col gap-3 bg-white p-3 rounded-[2.5rem] shadow-2xl animate-in slide-in-from-left-4 z-50 border-2 border-indigo-100">
                     {[
-                        { id: 'pen', icon: Pen },
-                        { id: 'highlighter', icon: Highlighter },
-                        { id: 'eraser', icon: Eraser },
-                        { id: 'text', icon: Type },
-                        { id: 'shape', icon: Square },
-                    ].map(t => (
-                        <button key={t.id} onClick={() => setCurrentTool(t.id)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${currentTool === t.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
-                            <t.icon size={20} />
-                        </button>
+                        { id: 'rectangle', icon: Square }, { id: 'circle', icon: Circle },
+                        { id: 'triangle', icon: Triangle }, { id: 'star', icon: Star },
+                        { id: 'arrow', icon: ArrowUpRight }, { id: 'line', icon: Minus },
+                        { id: 'check', icon: CheckCircle2 }, { id: 'cross', icon: XCircle }
+                    ].map(s => (
+                        <button key={s.id} onClick={() => setShapeType(s.id)} className={`w-12 h-12 rounded-2xl transition-all flex items-center justify-center ${shapeType === s.id ? 'bg-indigo-600 text-white shadow-lg scale-110' : 'text-slate-400 hover:bg-slate-50'}`}><s.icon size={22} /></button>
                     ))}
-                    <label className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-indigo-50 cursor-pointer">
-                        <ImageIcon size={20} />
-                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                    </label>
-                </aside>
+                </div>
+            )}
 
-                <main className="flex-1 relative bg-white touch-none" ref={containerRef}>
-                    <canvas ref={canvasRef} className="absolute inset-0 z-0" onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} />
-                    <canvas ref={tempCanvasRef} className="absolute inset-0 z-10 pointer-events-none" />
+            {/* Blackboard Canvas Surface */}
+            <main className="flex-1 relative touch-none bg-slate-900/50" ref={containerRef}>
+                <canvas ref={canvasRef} className="absolute inset-0 z-0" onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} />
+                <canvas ref={tempCanvasRef} className="absolute inset-0 z-10 pointer-events-none" />
 
-                    {textInput && (
-                        <textarea 
-                            ref={textAreaRef} autoFocus 
-                            value={textInput.value} 
-                            onChange={e => setTextInput({ ...textInput, value: e.target.value })}
+                {textInput?.visible && (
+                    <div className="absolute z-[60] bg-white/10 backdrop-blur-md p-1 rounded-2xl border-2 border-indigo-500 shadow-2xl" style={{ left: textInput.x, top: textInput.y }}>
+                        <textarea
+                            autoFocus
+                            value={textInput.value}
+                            onChange={(e) => setTextInput({ ...textInput, value: e.target.value })}
                             onBlur={finishText}
-                            placeholder="اكتب هنا..."
-                            className="absolute z-50 bg-white/90 border-2 border-indigo-500 rounded-xl p-2 shadow-2xl outline-none resize-none font-bold text-lg"
-                            style={{ left: textInput.x, top: textInput.y }}
+                            className="bg-transparent text-white outline-none font-black min-w-[280px] p-5 text-2xl resize-none placeholder:text-white/20"
+                            placeholder="اكتب فكرتك هنا..."
                         />
-                    )}
+                        <div className="flex justify-end p-2 border-t border-white/10"><button onClick={finishText} className="bg-indigo-600 text-white px-5 py-2 rounded-xl font-black text-xs shadow-lg">تثبيت النص</button></div>
+                    </div>
+                )}
 
-                    {/* Remote Cursors */}
-                    {Object.entries(remoteCursors).map(([id, c]: any) => (
-                        <div key={id} className="absolute z-40 pointer-events-none flex flex-col items-center" style={{ left: c.x * (containerRef.current?.clientWidth || 0), top: c.y * (containerRef.current?.clientHeight || 0) }}>
-                            <MousePointer2 size={20} className="text-indigo-600 fill-indigo-600" />
-                            <span className="bg-indigo-600 text-white text-[8px] px-1.5 py-0.5 rounded-full font-black">طالب</span>
-                        </div>
-                    ))}
-                </main>
-            </div>
+                {stickyNotes.map(note => (
+                    <div key={note.id} className="absolute p-6 shadow-[0_20px_50px_rgba(0,0,0,0.3)] animate-in zoom-in cursor-move z-30 group" style={{ left: note.x, top: note.y, backgroundColor: note.color, width: '220px', transform: 'rotate(-2deg)' }}>
+                        <button onClick={() => setStickyNotes(stickyNotes.filter(n => n.id !== note.id))} className="absolute -top-3 -right-3 w-8 h-8 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><CloseIcon size={14} /></button>
+                        <textarea className="w-full bg-transparent border-none outline-none font-black text-base text-slate-800 resize-none h-32" placeholder="اكتب ملاحظة هامة..." defaultValue={note.text} />
+                    </div>
+                ))}
+            </main>
 
-            <SessionModal 
-                isOpen={isSessionModalOpen} 
-                onClose={() => setIsSessionModalOpen(false)} 
-                onConnect={(room: string) => { setRoomId(room); setIsConnected(true); setIsSessionModalOpen(false); }} 
-            />
-            <style>{`canvas { touch-action: none; cursor: crosshair; }`}</style>
+            <style>{`
+                canvas { touch-action: none; cursor: crosshair; }
+                .stroke-round { stroke-linecap: round; stroke-linejoin: round; }
+            `}</style>
         </div>
     );
 };
