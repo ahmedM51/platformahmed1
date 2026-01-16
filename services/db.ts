@@ -3,12 +3,16 @@ import { User, Subject, Lecture, Task, Note, StudyStats } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from './config';
 
-const isSupabaseReady = CONFIG.SUPABASE_URL && CONFIG.SUPABASE_URL.startsWith('http') && CONFIG.SUPABASE_ANON_KEY;
+
+const hasValidSupabaseUrl = typeof CONFIG.SUPABASE_URL === 'string' && CONFIG.SUPABASE_URL.startsWith('http');
+const hasValidAnonKey = typeof CONFIG.SUPABASE_ANON_KEY === 'string';
+const isSupabaseReady = hasValidSupabaseUrl && hasValidAnonKey;
 
 export let supabase: SupabaseClient | null = null;
 if (isSupabaseReady) {
   try {
-    supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+    // Now types are always `string` due to the guards above
+    supabase = createClient(CONFIG.SUPABASE_URL as string, CONFIG.SUPABASE_ANON_KEY as string, {
       auth: { persistSession: true, autoRefreshToken: true }
     });
   } catch (e) {

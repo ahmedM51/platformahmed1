@@ -1,6 +1,9 @@
+
 export const CONFIG = {
-  GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY || '',
-  SUPABASE_URL: 'https://cmaxutqmblvvghftouqx.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4bWh3d292eHJuZWZpcnl5d3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MzgzNjQsImV4cCI6MjA3MjAxNDM2NH0.FqzkWel93icaJ781ZCPhvzfVJu4iwqCa3hxV3AKuRlA',
-  IS_PROD: import.meta.env.PROD
+  // قراءة مفتاح Gemini من البيئة
+  GEMINI_APi_kEY: import.meta.env.VITE_APi_kEY || '',
+  // بيانات Supabase للتزامن
+  SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+  SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
+  IS_PROD: true
 };
